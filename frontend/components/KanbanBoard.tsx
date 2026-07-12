@@ -33,7 +33,7 @@ export function KanbanBoard() {
             <div className="flex-1 bg-zinc-950/50 border border-zinc-900 rounded-xl p-3 space-y-3">
               {stageCandidates.length > 0 ? (
                 stageCandidates
-                  .sort((a, b) => b.match_score - a.match_score)
+                  .sort((a, b) => (b.combined_score ?? 0) - (a.combined_score ?? 0))
                   .map((candidate) => (
                     <CandidateCard key={candidate.id} candidate={candidate} />
                   ))

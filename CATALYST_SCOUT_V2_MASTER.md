@@ -15,7 +15,7 @@
 | v1 repo | https://github.com/Aswin-avaronnan/Catalyst-hackathon-agent |
 | v2 repo | TBD (new repo recommended) |
 | Target deployment | Frontend: Vercel · Backend: HuggingFace Spaces (Docker) |
-| Status | **PHASE-1 COMPLETE — awaiting CONFIRMATION FOR PHASE-2** |
+| Status | **PHASE-2 COMPLETE — ready to start PHASE-3** |
 
 ---
 
@@ -206,7 +206,7 @@ catalyst-scout-v2/
     ├── CATALYST_SCOUT_V2_MASTER.md  ← this file
     ├── DECISIONS.md                 (mirror of decisions above)
     └── API.md                       (endpoint reference)
-| Status | **PHASE 1 COMPLETE — Phase 2 (Simulation) ready to start** |
+| Status | **PHASE 2 COMPLETE — Phase 3 (Polish & Deployment) ready to start** |
 
 ---
 
@@ -227,12 +227,12 @@ catalyst-scout-v2/
 
 ### Phase 2 — Simulation (Target: weeks 6–8)
 
-- [ ] Backend: `agent/simulation.py` — AI-to-AI turn loop
-- [ ] Backend: `api/routes/simulate.py` — SSE stream endpoint
-- [ ] Backend: Post-simulation scoring integration
-- [ ] Frontend: `simulate/page.tsx` — transcript view
-- [ ] Frontend: `components/SimTranscript.tsx` — SSE consumer
-- [ ] Frontend: Ranking UI unlocked after simulation only
+- [x] Backend: `agent/simulation.py` — AI-to-AI turn loop
+- [x] Backend: `api/routes/simulate.py` — SSE stream endpoint
+- [x] Backend: Post-simulation scoring integration
+- [x] Frontend: `simulate/page.tsx` — transcript view
+- [x] Frontend: `components/SimTranscript.tsx` — SSE consumer
+- [x] Frontend: Ranking UI unlocked after simulation only
 
 ### Phase 3 — Polish + Deployment (Target: weeks 9–11)
 - [ ] Backend: `tools/kaggle_scout.py`
@@ -523,6 +523,13 @@ Every backend error returns a consistent JSON shape:
     - Implemented **Pipeline Persistence**: Added `sessionStorage` persistence to the pipeline store. Candidates survive refreshes but are wiped when the tab closes (Privacy First).
 - **Refinement**: Switched Pydantic calls to `model_dump()` (v2 standard) for consistent serialization.
 
+### 2026-07-12 — Phase 2 Simulation Validation & Alternating API Fixes
+- **Backend Simulation Stability**: Fixed a critical bug in `agent/simulation.py` where the message history didn't alternate properly (first message was not from user for LLM-A, and consecutive user messages occurred during evaluation), which violates strict API validation rules of providers like Anthropic and Gemini.
+- **Frontend UI/UX Enhancements**:
+    - Updated `KanbanBoard.tsx` to sort candidates by their `combined_score` instead of `match_score` after they have been simulated, ensuring the final ranks are correctly reflected on the board.
+    - Improved `JDInput.tsx` to report specific lookup errors/rate limit warnings using an alert and block invalid submissions if all lookups fail.
+    - Implemented Zustand filters in `pipeline.ts` to prevent UI rendering crashes from failed candidate payloads.
+
 ---
 
 ## Notes for Next Agent / Session
@@ -544,4 +551,4 @@ If you are an AI agent picking up this project, start here:
 
 ---
 
-*Last updated: 2026-06-13 — Phase 1 complete, core pipeline functional*
+*Last updated: 2026-07-12 — Phase 2 complete, simulation pipeline fully validated*

@@ -4,12 +4,15 @@ export async function fetchBackend(endpoint: string, options: any = {}) {
   const { provider, apiKey, githubToken } = useSessionStore.getState();
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:7860';
 
-  const headers = {
-    'Content-Type': 'application/json',
+  const headers: any = {
     'X-User-Api-Key': apiKey,
     ...(githubToken ? { 'X-GitHub-Token': githubToken } : {}),
     ...options.headers,
   };
+
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const response = await fetch(`${baseUrl}${endpoint}`, {
     ...options,

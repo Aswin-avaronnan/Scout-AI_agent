@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { KeyVault } from './components/KeyVault';
+import { KeyVault } from '../components/KeyVault';
 import Link from 'next/link';
-import { useSessionStore } from './store/session';
+import { useSessionStore } from '../store/session';
 
 export default function OnboardingPage() {
   const { apiKey } = useSessionStore();

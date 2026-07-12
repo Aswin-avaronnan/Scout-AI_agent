@@ -10,10 +10,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY . ./backend/
 
 # HF Spaces requires port 7860
 ENV PORT=7860
 EXPOSE 7860
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "backend.main"]

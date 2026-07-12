@@ -35,9 +35,12 @@ export default function PipelinePage() {
           >
             <Plus size={14} /> New Scout
           </Link>
-          <button className="p-2 rounded bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-white transition-all">
+          <Link 
+            href="/settings"
+            className="p-2 rounded bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-white transition-all"
+          >
             <Settings size={16} />
-          </button>
+          </Link>
         </div>
       </header>
 

@@ -6,6 +6,10 @@ import { User, Github, Star, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
 export function CandidateCard({ candidate }: { candidate: Candidate }) {
+  const isSimulated = candidate.simulation_status === 'completed' && candidate.simulation_eval;
+  const displayScore = isSimulated ? candidate.combined_score : candidate.match_score;
+  const scoreLabel = isSimulated ? 'Score' : 'Match';
+
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 hover:border-zinc-700 transition-all space-y-4">
       <div className="flex items-start justify-between">
@@ -29,19 +33,34 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
         </div>
         <div className="flex flex-col items-end">
           <div className="text-xl font-black text-white">
-            {candidate.match_score}<span className="text-[10px] text-zinc-600 font-normal">%</span>
+            {displayScore}<span className="text-[10px] text-zinc-600 font-normal">%</span>
           </div>
-          <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold">Match</span>
+          <span className="text-[8px] uppercase tracking-wider text-zinc-500 font-bold">{scoreLabel}</span>
         </div>
       </div>
 
       <div className="space-y-2">
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           {candidate.top_languages.slice(0, 3).map(lang => (
             <span key={lang} className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] text-zinc-300">
               {lang}
             </span>
           ))}
+          {candidate.simulation_status === 'simulating' && (
+            <span className="px-1.5 py-0.5 rounded bg-amber-950/50 border border-amber-900 text-[8px] font-bold text-amber-400 animate-pulse uppercase tracking-wider">
+              Simulating
+            </span>
+          )}
+          {candidate.simulation_status === 'pending' && (
+            <span className="px-1.5 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
+              Pending Sim
+            </span>
+          )}
+          {candidate.simulation_status === 'failed' && (
+            <span className="px-1.5 py-0.5 rounded bg-red-950/50 border border-red-900 text-[8px] font-bold text-red-400 uppercase tracking-wider">
+              Sim Failed
+            </span>
+          )}
         </div>
         <p className="text-[11px] text-zinc-400 line-clamp-2 italic leading-relaxed">
           "{candidate.reasoning}"
