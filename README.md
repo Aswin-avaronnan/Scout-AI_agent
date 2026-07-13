@@ -1,8 +1,8 @@
-# Catalyst Scout
+# Catalyst Scout (Build Still in Progress)
 
 **AI recruiting copilot that sources, scores, and interviews candidates straight from GitHub — using your own API key, not ours.**
 
-🔗 **Live app:** [catalyst-scout.vercel.app](https://catalyst-scout.vercel.app) *(replace with your actual Vercel URL after deploying)*
+🔗 **Live app:** [catalyst-scout.vercel.app](https://scout-ai-agent-khaki.vercel.app/)
 No signup. No installation. Nothing to configure. Open the link, paste an API key, start scouting.
 
 ---
@@ -23,7 +23,7 @@ Nothing about this requires an account. **You bring your own LLM API key**, it l
 
 ## Quickstart (using the hosted app)
 
-1. Open the [live app](https://catalyst-scout.vercel.app).
+1. Open the [live app](https://scout-ai-agent-khaki.vercel.app/).
 2. Get a free API key from one provider — [Groq](https://console.groq.com/keys) is genuinely free and fast, good for trying this out.
 3. Paste the key into the **Key Vault** on the landing page. Optionally add a GitHub personal access token too — it's not required, but it raises your GitHub rate limit from 60 requests/hour to 5,000.
 4. Click **Start Scouting**, paste in a job description, add candidate GitHub usernames (or upload a resume PDF / CSV list).
