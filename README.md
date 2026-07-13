@@ -2,7 +2,7 @@
 
 **AI recruiting copilot that sources, scores, and interviews candidates straight from GitHub — using your own API key, not ours.**
 
-🔗 **Live app:** [catalyst-scout.vercel.app](https://scout-ai-agent-khaki.vercel.app/)
+🔗 **Live app:** [scout-ai-agent-khaki.vercel.app](https://scout-ai-agent-khaki.vercel.app/)
 No signup. No installation. Nothing to configure. Open the link, paste an API key, start scouting.
 
 ---
