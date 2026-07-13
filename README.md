@@ -1,117 +1,156 @@
-# Catalyst Scout v2
+# Catalyst Scout
 
-> AI-powered recruiting assistant for technical recruiters. Upload a job description, source candidates from GitHub, run AI-to-AI interview simulations, and get a ranked shortlist — all using your own LLM API key. Zero installation. Zero key storage.
+**AI recruiting copilot that sources, scores, and interviews candidates straight from GitHub — using your own API key, not ours.**
 
----
-
-## What It Does
-
-1. **Parse JDs** — paste text, upload a PDF, or provide a URL; the agent extracts structured requirements.
-2. **Scout candidates** — enriches candidate records with real GitHub profile data (repos, languages, activity).
-3. **Score & rank** — configurable 60/40 formula: skill match score + AI simulation evaluation score.
-4. **Simulate interviews** — an LLM-A interviewer questions an LLM-B candidate persona in a turn-based loop, streamed live to the UI.
-5. **Pipeline board** — Kanban view with four stages: Sourced → Scored → Simulated → Shortlisted.
-
-> **BYOK model**: your API key lives in `sessionStorage` only. It is passed per-request as an HTTP header and never logged, stored, or sent to any database.
+🔗 **Live app:** [catalyst-scout.vercel.app](https://catalyst-scout.vercel.app) *(replace with your actual Vercel URL after deploying)*
+No signup. No installation. Nothing to configure. Open the link, paste an API key, start scouting.
 
 ---
 
-## Tech Stack
+## What this is
+
+You give it a job description and a list of GitHub usernames (or a resume, or a CSV of candidates). It:
+
+1. **Reads the job description** and extracts the real requirements — title, must-have skills, years of experience, domain.
+2. **Pulls each candidate's public GitHub profile** — repos, languages, activity — no scraping, no bulk search, just the GitHub API.
+3. **Scores the match** (0–100) with reasoning for *why*, plus which required skills are covered and which are missing.
+4. **Optionally runs an AI-to-AI mock interview** — one model plays a strict technical interviewer, another plays the candidate persona (grounded in their actual repos and bio), and you get a live transcript plus a structured hire recommendation.
+5. **Ranks everyone on a Kanban board** — Sourced → Scored → Simulated — using a scoring formula you control.
+
+Nothing about this requires an account. **You bring your own LLM API key**, it lives in your browser tab only, and it's gone the moment you close the tab.
+
+---
+
+## Quickstart (using the hosted app)
+
+1. Open the [live app](https://catalyst-scout.vercel.app).
+2. Get a free API key from one provider — [Groq](https://console.groq.com/keys) is genuinely free and fast, good for trying this out.
+3. Paste the key into the **Key Vault** on the landing page. Optionally add a GitHub personal access token too — it's not required, but it raises your GitHub rate limit from 60 requests/hour to 5,000.
+4. Click **Start Scouting**, paste in a job description, add candidate GitHub usernames (or upload a resume PDF / CSV list).
+5. Review scored candidates on the pipeline board. Open any candidate to optionally run a simulated interview.
+6. Adjust how much match-score vs. interview-score counts toward the final rank from **Settings**, or export your whole session as JSON at any time.
+
+That's the entire product. No further setup.
+
+---
+
+## Why BYOK (Bring Your Own Key)
+
+This is a deliberate architectural choice, not a limitation:
+
+- Your API key is stored in the browser's `sessionStorage` only — never in a database, never in a server log, wiped automatically when the tab closes.
+- It's sent to the backend as a request header (`X-User-Api-Key`) on each call and passed straight through to your chosen LLM provider. The backend never persists it.
+- Every LLM call is billed directly to *your* account, at *your* provider's rates. There's no markup, no shared quota, no "out of credits" wall.
+- If you'd rather not trust a hosted app with a key at all, this is fully self-hostable — see below.
+
+---
+
+## How it works (architecture)
+
+```
+┌─────────────┐        HTTPS + X-User-Api-Key header        ┌──────────────┐
+│   Next.js    │ ───────────────────────────────────────▶  │   FastAPI     │
+│  (Vercel)    │ ◀───────────────────────────────────────  │  (Render)     │
+└─────────────┘         JSON / Server-Sent Events           └──────┬───────┘
+                                                                     │
+                                              ┌──────────────────────┼──────────────────────┐
+                                              ▼                      ▼                       ▼
+                                        GitHub REST API      Your chosen LLM API      (nothing is stored —
+                                     (public profile data)  (OpenAI/Anthropic/Gemini/  stateless per request)
+                                                              Groq/OpenRouter)
+```
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui |
-| State management | Zustand (in-memory + `sessionStorage` sync) |
-| Backend | FastAPI, Python 3.11+, async throughout |
-| HTTP client | `httpx.AsyncClient` (no blocking I/O in async routes) |
-| LLM providers | OpenAI, Anthropic (Claude), Google (Gemini), Groq, OpenRouter, Ollama (local) |
-| PDF parsing | `pymupdf4llm` → Markdown (fallback: `markitdown`) |
-| Data validation | Pydantic v2 |
-| Streaming | Server-Sent Events (SSE) for simulation transcript + agent thought log |
-| Backend deployment | HuggingFace Spaces (Docker, port 7860, always-on free tier) |
-| Frontend deployment | Vercel |
-| License | MIT |
+| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS, Zustand |
+| Backend | FastAPI, Python 3.11+, fully async |
+| HTTP client | `httpx.AsyncClient` |
+| LLM providers | OpenAI, Anthropic, Google Gemini, Groq, OpenRouter (any OpenAI-compatible endpoint) |
+| PDF parsing | `pymupdf4llm` |
+| Validation | Pydantic v2 |
+| Streaming | Server-Sent Events for live interview transcripts |
+| Backend hosting | Render (Docker) — also runs on HuggingFace Spaces, Google Cloud Run, or any Docker host |
+| Frontend hosting | Vercel |
 
 ---
 
-## Project Structure
+## Feature walkthrough
 
-```
-catalyst-scout-v2/
-├── backend/
-│   ├── agent/
-│   │   ├── core.py            # Observe → Think → Evaluate → Generate → Critique → Finalize loop
-│   │   ├── scorer.py          # 60/40 weighted scoring engine
-│   │   └── simulation.py      # AI-to-AI interview turn loop
-│   ├── tools/
-│   │   ├── github_scout.py    # GitHub REST API enrichment (profile + repos + languages)
-│   │   ├── kaggle_scout.py    # Kaggle API (Phase 3)
-│   │   ├── jd_parser.py       # Structured JD extraction via LLM
-│   │   └── file_ingest.py     # CSV / JSON / PDF resume parsing
-│   ├── llm/
-│   │   └── client.py          # Unified provider abstraction (OpenAI / Anthropic / Gemini / Groq)
-│   ├── api/
-│   │   ├── routes/
-│   │   │   ├── scout.py       # POST /scout
-│   │   │   ├── simulate.py    # POST /simulate  (SSE)
-│   │   │   ├── parse_jd.py    # POST /parse-jd
-│   │   │   └── upload.py      # POST /upload
-│   │   └── middleware/
-│   │       └── log_strip.py   # Strips X-User-Api-Key from all logs
-│   ├── main.py                # FastAPI app entry point
-│   ├── Dockerfile             # HuggingFace Spaces compatible (port 7860)
-│   └── requirements.txt
-│
-└── frontend/
-    ├── app/
-    │   ├── page.tsx            # Onboarding / key vault
-    │   ├── scout/page.tsx      # JD input + sourcing config
-    │   ├── pipeline/page.tsx   # Kanban board
-    │   ├── candidate/[id]/page.tsx
-    │   ├── simulate/page.tsx   # Streaming transcript view
-    │   └── settings/page.tsx   # Weight sliders, provider swap
-    ├── store/
-    │   └── session.ts          # Zustand store (keys + pipeline state)
-    ├── lib/
-    │   ├── api.ts              # Typed fetch wrappers → backend
-    │   └── ollama.ts           # Local Ollama client (bypasses backend entirely)
-    └── components/
-        ├── KeyVault.tsx
-        ├── JDInput.tsx
-        ├── CandidateCard.tsx
-        ├── KanbanBoard.tsx
-        ├── SimTranscript.tsx
-        └── ScoreBreakdown.tsx
-```
+### 1. Job description parsing
+Paste raw text. An LLM call extracts `job_title`, `skills_required`, `experience_years`, a short `summary`, and `domain` — this structured object is reused across scoring and simulation so nothing gets re-parsed.
+
+### 2. GitHub scouting
+For each candidate, the backend hits the GitHub REST API directly:
+- `GET /users/{username}` — profile
+- `GET /users/{username}/repos?sort=updated&per_page=30` — recent repos
+- Languages are aggregated from repo metadata into a top-5 list
+
+Unauthenticated requests get GitHub's standard 60 req/hour limit; adding a personal access token in the Key Vault raises that to 5,000 req/hour.
+
+### 3. Scoring
+One LLM call compares the parsed JD against the candidate's GitHub data and returns a 0–100 match score, a short written rationale, and explicit `skill_match` / `missing_skills` lists — so you can see *why* someone scored the way they did, not just the number.
+
+### 4. Simulated interviews (optional, per-candidate)
+Two independent LLM roles run in the same conversation loop:
+- **Interviewer** — briefed on the job description, asks one focused technical question per turn, doesn't validate or hint.
+- **Candidate persona** — briefed on the candidate's real bio and repositories, instructed to honestly say "I haven't used that" rather than hallucinate expertise.
+
+Default is 3 turns (configurable 1–10), streamed live to the browser via SSE. After the final turn, the interviewer LLM produces a structured evaluation: `technical_depth`, `communication`, `red_flags`, and a `hire_recommendation` (Strong Hire / Hire / No Hire / Strong No Hire).
+
+### 5. Ranking & pipeline
+Final rank = `(match_score × match_weight) + (simulation_score × sim_weight)`, default 60/40, adjustable live from Settings — every candidate's rank recalculates instantly across the board when you move the slider.
+
+### 6. Session export
+Settings → Export Session downloads your entire working session (JD, candidates, scores, transcripts) as a JSON file, generated entirely client-side. Your API key is never included in the export.
 
 ---
 
-## Getting Started
+## Supported LLM providers
 
-### Prerequisites
+| Provider | Get a key | Notes |
+|---|---|---|
+| Groq | [console.groq.com](https://console.groq.com/keys) | Free tier, fast — best for trying the app out |
+| OpenAI | [platform.openai.com](https://platform.openai.com/api-keys) | Default model `gpt-4o-mini` |
+| Anthropic | [console.anthropic.com](https://console.anthropic.com) | Default model `claude-3-haiku-20240307` |
+| Google Gemini | [aistudio.google.com](https://aistudio.google.com/apikey) | Free tier available, default `gemini-1.5-flash` |
+| OpenRouter | [openrouter.ai](https://openrouter.ai/keys) | Access to nearly any model through one key |
 
-- Python 3.11+
-- Node.js 18+
-- An API key for at least one supported LLM provider (or local Ollama)
+---
 
-### Backend (local)
+## API reference
+
+All endpoints (except `/health`) require an `X-User-Api-Key` header. `X-GitHub-Token` is optional on any route that touches GitHub.
+
+| Method | Path | Description | Limits |
+|---|---|---|---|
+| `GET` | `/health` | Liveness check | — |
+| `POST` | `/scout` | Parse a JD + score a list of GitHub usernames in parallel | max 25 usernames/request, JD text ≤ 20,000 chars |
+| `POST` | `/simulate` | Stream a live AI-to-AI interview (SSE) for one candidate | `num_turns` between 1–10 |
+| `POST` | `/upload/resume` | Parse a single PDF resume, cross-reference with GitHub if a profile link is found | PDF only, ≤ 10MB |
+| `POST` | `/upload/candidates` | Bulk score candidates from a CSV or JSON sheet | ≤ 100 rows, ≤ 10MB |
+
+All requests over these limits return a clear `4xx` with a human-readable message — nothing fails silently or times out unexpectedly.
+
+---
+
+## Self-hosting
+
+### Backend
 
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 7860 --reload
+uvicorn backend.main:app --host 0.0.0.0 --port 7860 --reload
 ```
 
-Create `backend/.env`:
+Environment variables (all optional — sane defaults for local dev):
 
 ```env
-CORS_ORIGINS=http://localhost:3000
 PORT=7860
-LOG_LEVEL=info
-# No LLM keys here — they come from request headers per session
+ALLOWED_ORIGINS=http://localhost:3000
 ```
 
-### Frontend (local)
+### Frontend
 
 ```bash
 cd frontend
@@ -119,162 +158,91 @@ npm install
 npm run dev
 ```
 
-Create `frontend/.env.local`:
-
 ```env
+# frontend/.env.local
 NEXT_PUBLIC_API_BASE_URL=http://localhost:7860
 ```
 
----
+### Deploying your own instance
 
-## Deployment
+**Backend → Render** (recommended, has a real free tier):
+This repo includes `render.yaml` — connect the repo in Render as a **Blueprint** and it builds, deploys, and redeploys automatically on every push. Update `ALLOWED_ORIGINS` in `render.yaml` to your real frontend domain once you have one.
 
-### Backend → HuggingFace Spaces
+Also works unmodified on Google Cloud Run, HuggingFace Spaces (Docker SDK), Fly.io, or any platform that runs a Dockerfile and respects a `PORT` env var.
 
-1. Create a new Space → Docker SDK.
-2. Push the `backend/` folder (the `Dockerfile` is already configured for port 7860).
-3. The Space URL becomes your `NEXT_PUBLIC_API_BASE_URL`.
-
-```dockerfile
-# Dockerfile binds uvicorn to 0.0.0.0:7860 — required by HuggingFace Spaces
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
-```
-
-### Frontend → Vercel
-
+**Frontend → Vercel**:
 ```bash
 cd frontend
 vercel deploy
 ```
+Set `NEXT_PUBLIC_API_BASE_URL` in the Vercel project's environment variables to your deployed backend URL, then redeploy (Next.js bakes `NEXT_PUBLIC_*` vars in at build time, so a redeploy is required after changing it).
 
-Set environment variable in the Vercel dashboard:
+---
+
+## Security notes
+
+- **No server-side key custody** — API keys never touch a database or disk on the backend; they're relayed per-request and discarded.
+- **CORS allowlist** — the backend only accepts browser requests from origins explicitly listed in `ALLOWED_ORIGINS`.
+- **Request caps** — every endpoint enforces limits on payload size, candidate count, and interview length server-side, not just in the UI, to prevent abuse of the hosted instance.
+- **No raw error leakage** — internal exceptions are logged server-side and never echoed to the client; API responses return generic, safe error messages.
+- **Custom-header auth** — keys travel via custom HTTP headers rather than form fields, which also means a plain HTML form on another site can't silently trigger authenticated-looking requests against this API.
+
+---
+
+## Project structure
 
 ```
-NEXT_PUBLIC_API_BASE_URL=https://your-space.hf.space
+Scout-AI_agent/
+├── render.yaml                     # Render Blueprint — backend deploy config
+├── backend/
+│   ├── main.py                     # FastAPI app entry point, CORS, routing
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── llm/
+│   │   └── client.py                # Unified LLM provider abstraction
+│   ├── agent/
+│   │   ├── scorer.py                # JD ↔ candidate match scoring
+│   │   └── simulation.py            # AI-to-AI interview turn loop
+│   ├── tools/
+│   │   ├── jd_parser.py             # Structured JD extraction
+│   │   ├── github_scout.py          # GitHub REST API enrichment
+│   │   └── file_ingest.py           # PDF / CSV / JSON parsing
+│   └── api/routes/
+│       ├── scout.py                 # POST /scout
+│       ├── simulate.py              # POST /simulate (SSE)
+│       └── upload.py                # POST /upload/resume, /upload/candidates
+│
+└── frontend/
+    ├── app/
+    │   ├── page.tsx                  # Onboarding + Key Vault
+    │   ├── scout/page.tsx            # JD input
+    │   ├── pipeline/page.tsx         # Kanban board
+    │   ├── candidate/[id]/page.tsx   # Candidate detail
+    │   ├── simulate/page.tsx         # Live interview stream
+    │   └── settings/page.tsx         # Weights, key vault, export
+    ├── components/
+    │   ├── KeyVault.tsx
+    │   ├── JDInput.tsx
+    │   ├── CandidateCard.tsx
+    │   ├── KanbanBoard.tsx
+    │   └── SimTranscript.tsx
+    ├── store/
+    │   ├── session.ts                # API keys (sessionStorage-persisted)
+    │   └── pipeline.ts               # Candidates, JD, scoring weights
+    └── lib/api.ts                    # Typed fetch wrapper → backend
 ```
-
----
-
-## Supported LLM Providers
-
-| Provider | Auth header | Notes |
-|---|---|---|
-| OpenAI | `X-User-Api-Key` | GPT-4o, GPT-4o-mini |
-| Anthropic | `X-User-Api-Key` | Claude 3.5 Haiku, Sonnet, Opus |
-| Google | `X-User-Api-Key` | Gemini 1.5 Flash / Pro |
-| Groq | `X-User-Api-Key` | Llama 3.3 70B — effectively free |
-| OpenRouter | `X-User-Api-Key` | Any model via unified API |
-| Ollama | _(none)_ | Calls `localhost:11434` directly from the browser — backend is **not** involved |
-
-Keys are stored in `sessionStorage` only. They are cleared when the browser tab closes. The backend middleware strips them from all logs before they are written.
-
----
-
-## Scoring Formula
-
-```
-final_score = (match_score × match_weight) + (sim_score × sim_weight)
-
-defaults: match_weight = 0.60, sim_weight = 0.40
-```
-
-Weights are adjustable via the Settings page (0–100 slider). Final ranking is only shown after the simulation completes. Before that, candidates display their match score with a **"Pending simulation"** badge.
-
----
-
-## Simulation
-
-The simulation is an AI-to-AI interview:
-
-- **LLM-A** acts as a senior technical interviewer briefed on the JD.
-- **LLM-B** acts as the candidate persona, briefed on the candidate's profile.
-- Runs for 3–5 configurable turns, streamed live via SSE.
-- After the final turn, LLM-A produces a structured JSON evaluation (`technical_depth`, `communication`, `red_flags`, `hire_recommendation`).
-
-**Simulation is never automatic.** It requires:
-1. Opening the candidate detail view.
-2. Clicking **"Run Simulation"**.
-3. Confirming a modal that shows estimated token cost and **"This uses your API key"**.
-
-Token cost estimate per run at 3 turns: ~8,400 tokens (~$0.003 on Claude Haiku, ~$0 on Groq).
-
----
-
-## GitHub Scouting
-
-Only candidate-provided GitHub URLs are fetched — no bulk searching or scraping.
-
-Per candidate, up to 3 API requests are made:
-- `GET /users/{username}` — profile
-- `GET /users/{username}/repos?per_page=30&sort=updated` — recent repos
-- `GET /repos/{owner}/{repo}/languages` — top 3 repos
-
-| Mode | Rate limit |
-|---|---|
-| Unauthenticated | 60 req/hr (~20 candidates/hr) |
-| GitHub PAT provided | 5,000 req/hr |
-
-Users can optionally add a GitHub PAT in the key vault for bulk scouting.
-
----
-
-## Error Handling
-
-The system uses a 10-code error taxonomy with no silent failures:
-
-| Code | Cause | Response |
-|---|---|---|
-| E-001 | Invalid/expired API key | Inline error on key vault, re-entry prompt |
-| E-002 | LLM provider rate limit | Banner with countdown, auto-resume |
-| E-003 | GitHub rate limit | Inline on candidate card, processing continues |
-| E-004 | LLM timeout / network failure | Auto-retry once, then manual retry option |
-| E-005 | Malformed LLM JSON response | Auto-retry with explicit JSON prompt |
-| E-006 | PDF extraction failure | Inline error, text-paste fallback offered |
-| E-007 | File upload validation failure | Immediate inline validation, CSV template download |
-| E-008 | Simulation fails mid-run | Completed turns preserved, candidate returns to Scored |
-| E-009 | Backend unreachable | Exponential backoff (3 attempts), session export offered |
-| E-010 | Ollama server unreachable | Inline error with `ollama pull` instructions |
-
-Every backend error returns a consistent JSON shape including `error_code`, `retryable`, `retry_after_seconds`, `request_id`, and `partial_result`.
-
----
-
-## Session Export
-
-Session state can be exported at any time via **Settings → Export Session**. The export is generated entirely in the browser (Zustand state → JSON blob → download). Nothing is sent to the backend.
-
-The export includes: JD (raw + parsed), all candidate records, simulation transcripts, scores, pipeline stages, and error context if applicable. **API keys are never included.**
 
 ---
 
 ## Roadmap
 
-### Phase 1 — Core Pipeline ✅
-- LLM client abstraction, JD parser, GitHub scout, scorer, Kanban UI
-
-### Phase 2 — Simulation (in progress)
-- `agent/simulation.py`, SSE stream endpoint, simulation transcript UI, post-simulation ranking
-
-### Phase 3 — Polish
-- Kaggle scouting, PDF/CSV file ingest, export to PDF/CSV, Settings page, live deployment
-
-### v2.1 — Future
 - Token usage + cost tracker per session
-- Read-only HR share links (signed URL)
-- User authentication (Clerk or Supabase)
-- Session re-import from export file
+- Read-only, shareable HR links for a finished pipeline
+- Per-IP rate limiting on the hosted instance
+- Session re-import from a previously exported JSON file
+- drop down model listing for hazzle free initiation
 
 ---
-
-## Contributing
-
-1. Fork the repo.
-2. Create a feature branch: `git checkout -b feat/your-feature`.
-3. Follow the coding standards: typed Python, Pydantic v2, async throughout; TypeScript strict mode, no `any`.
-4. Open a PR against `main`.
-
----
-
 ## License
 
-[MIT](LICENSE) © 2026 Aswin Avaronnan
+MIT © Aswin Avaronnan
