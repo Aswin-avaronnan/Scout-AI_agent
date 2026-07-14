@@ -14,6 +14,7 @@ export function JDInput() {
   const [jdText, setJdText] = useState('');
   const [usernames, setUsernames] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [enrichGithub, setEnrichGithub] = useState(true);
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   
@@ -89,7 +90,7 @@ export function JDInput() {
           setLoading(false);
           return;
         }
-        const usernameList = usernames.split(',').map(u => u.trim()).filter(u => u);
+        const usernameList = usernames.split(/[,\n]+/).map(u => u.trim()).filter(u => u);
         data = await fetchBackend('/scout', {
           method: 'POST',
           body: JSON.stringify({
@@ -111,6 +112,9 @@ export function JDInput() {
         formData.append('jd_text', jdText);
         formData.append('provider', provider);
         formData.append('model', model || '');
+        if (activeTab === 'resume') {
+          formData.append('enrich_github', String(enrichGithub));
+        }
         
         const endpoint = activeTab === 'resume' ? '/upload/resume' : '/upload/candidates';
         
@@ -263,6 +267,27 @@ export function JDInput() {
                 </div>
               )}
               
+              {activeTab === 'resume' && (
+                <label className="flex items-start gap-3 bg-zinc-900/40 border border-zinc-850 p-4 rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enrichGithub}
+                    onChange={(e) => setEnrichGithub(e.target.checked)}
+                    className="mt-0.5 accent-white h-4 w-4"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      Enrich with live GitHub data
+                    </span>
+                    <span className="text-[10px] text-zinc-500 leading-normal block mt-0.5">
+                      If a GitHub link is found on the resume, fetch their real profile, repos, and
+                      languages. Turn this off to score from resume text alone — useful for candidates
+                      without a GitHub presence, or to test resume parsing on its own.
+                    </span>
+                  </div>
+                </label>
+              )}
+
               {activeTab === 'sheet' && (
                 <p className="text-[10px] text-zinc-600 leading-normal">
                   💡 **CSV Schema Tip:** Ensure your sheet has a column labeled <span className="text-zinc-400 font-mono font-bold">username</span>, <span className="text-zinc-400 font-mono font-bold">github_username</span>, or <span className="text-zinc-400 font-mono font-bold">github_url</span>. Any additional columns (e.g. name) will be parsed and enriched automatically.

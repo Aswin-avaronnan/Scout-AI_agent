@@ -37,12 +37,14 @@ async def upload_resume(
     jd_text: str = Form(...),
     provider: str = Form("openai"),
     model: Optional[str] = Form(None),
+    enrich_github: bool = Form(True),
     x_user_api_key: str = Header(...),
     x_github_token: Optional[str] = Header(None)
 ):
     """
     Ingests a single PDF resume, converts to Markdown, parses candidate profile via LLM,
-    scouts GitHub if a profile is present, and returns a formatted candidate record.
+    optionally scouts GitHub if a profile is present and enrich_github is True,
+    and returns a formatted candidate record.
     """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF resumes are supported.")
@@ -66,9 +68,9 @@ async def upload_resume(
             extracted_profile_task
         )
         
-        # 4. Fetch GitHub data if username/url found
+        # 4. Fetch GitHub data only if the user opted in AND a real link was found on the resume
         gh_username = None
-        if extracted_profile.github_url:
+        if enrich_github and extracted_profile.github_url:
             import re
             url_match = re.search(r"github\.com/([^/]+)", extracted_profile.github_url)
             if url_match:
@@ -76,23 +78,31 @@ async def upload_resume(
         
         candidate_data = None
         top_languages = []
+        github_found = False
         
         if gh_username:
             try:
                 gh_scout = GitHubScout(token=x_github_token)
                 candidate_data = await gh_scout.get_candidate_data(gh_username)
                 top_languages = candidate_data.top_languages
+                github_found = True
             except Exception:
-                # If GitHub lookup fails, fallback to resume-only profile
+                # Lookup failed (rate limit, 404, etc). Fall back to resume-only,
+                # but keep the real extracted username rather than inventing one.
                 pass
                 
         if not candidate_data:
-            # Fallback layout using extracted resume details
+            # No verified GitHub profile — either enrichment was turned off, the resume
+            # had no GitHub link, or the lookup failed. Do NOT fabricate a username from
+            # name/email; use a clearly synthetic, non-GitHub identifier instead so nothing
+            # downstream mistakes this for a real, resolvable GitHub account.
+            import uuid
+            resume_identifier = gh_username or f"resume-{uuid.uuid4().hex[:8]}"
             profile = GitHubProfile(
-                username=gh_username or extracted_profile.email or extracted_profile.name.replace(" ", "").lower(),
+                username=resume_identifier,
                 name=extracted_profile.name,
                 bio=extracted_profile.bio,
-                location="Unknown (from Resume)",
+                location="Not provided (resume-only)",
                 public_repos=0,
                 followers=0,
                 following=0,
@@ -114,6 +124,7 @@ async def upload_resume(
             "username": candidate_data.profile.username,
             "profile": candidate_data.profile.model_dump(),
             "top_languages": top_languages,
+            "github_found": github_found,
             "match_score": match_eval["score"],
             "reasoning": match_eval["reasoning"],
             "skill_match": match_eval["skill_match"],

@@ -6,7 +6,7 @@ import { useSessionStore } from '../store/session';
 const PROVIDERS = [
   { id: 'openai', name: 'OpenAI', defaultModel: 'gpt-4o-mini' },
   { id: 'anthropic', name: 'Anthropic', defaultModel: 'claude-3-haiku-20240307' },
-  { id: 'google', name: 'Google Gemini', defaultModel: 'gemini-1.5-flash' },
+  { id: 'google', name: 'Google Gemini', defaultModel: 'gemini-2.5-flash' },
   { id: 'groq', name: 'Groq', defaultModel: 'llama-3.3-70b-versatile' },
   { id: 'openrouter', name: 'OpenRouter', defaultModel: 'google/gemini-flash-1.5' },
 ];
@@ -59,7 +59,7 @@ export function KeyVault() {
         </div>
 
         <div className="pt-4 border-t border-zinc-800">
-          <label className="block text-xs font-medium text-zinc-500 uppercase mb-1">GitHub PAT (Optional)</label>
+          <label className="block text-xs font-medium text-zinc-500 uppercase mb-1">GitHub PAT*</label>
           <input
             type="password"
             value={githubToken}
@@ -67,7 +67,7 @@ export function KeyVault() {
             placeholder="ghp_..."
             className="w-full bg-zinc-800 border border-zinc-700 text-zinc-200 rounded px-3 py-2 outline-none focus:ring-1 focus:ring-zinc-600"
           />
-          <p className="text-[10px] text-zinc-500 mt-1">Increases GitHub rate limit from 60 to 5000 req/hr.</p>
+          <p className="text-[10px] text-zinc-500 mt-1">*Increases GitHub rate limit from 60 to 5000 req/hr.</p>
         </div>
       </div>
     </div>

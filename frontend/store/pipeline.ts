@@ -6,6 +6,7 @@ export interface Candidate {
   username: string;
   profile: any;
   top_languages: string[];
+  github_found?: boolean;
   match_score: number;
   reasoning: string;
   skill_match: string[];

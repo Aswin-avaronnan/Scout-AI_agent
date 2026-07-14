@@ -2,13 +2,17 @@
 
 import React from 'react';
 import { Candidate } from '../store/pipeline';
-import { User, Github, Star, ExternalLink } from 'lucide-react';
+import { User, Github, Star, ExternalLink, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 export function CandidateCard({ candidate }: { candidate: Candidate }) {
   const isSimulated = candidate.simulation_status === 'completed' && candidate.simulation_eval;
   const displayScore = isSimulated ? candidate.combined_score : candidate.match_score;
   const scoreLabel = isSimulated ? 'Score' : 'Match';
+  // github_found is only present on resume-uploaded candidates; anything sourced
+  // directly via /scout or a sheet upload has a real GitHub username, so treat
+  // undefined as "yes, this is real" rather than assuming the negative.
+  const hasRealGithub = candidate.github_found !== false;
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 hover:border-zinc-700 transition-all space-y-4">
@@ -26,8 +30,17 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
               {candidate.profile.name || candidate.username}
             </h3>
             <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-mono">
-              <Github size={10} />
-              <span>{candidate.username}</span>
+              {hasRealGithub ? (
+                <>
+                  <Github size={10} />
+                  <span>{candidate.username}</span>
+                </>
+              ) : (
+                <>
+                  <FileText size={10} />
+                  <span>Resume-only profile</span>
+                </>
+              )}
             </div>
           </div>
         </div>
