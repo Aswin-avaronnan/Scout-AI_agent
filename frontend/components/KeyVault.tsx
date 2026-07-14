@@ -7,7 +7,7 @@ const PROVIDERS = [
   { id: 'openai', name: 'OpenAI', defaultModel: 'gpt-4o-mini' },
   { id: 'anthropic', name: 'Anthropic', defaultModel: 'claude-3-haiku-20240307' },
   { id: 'google', name: 'Google Gemini', defaultModel: 'gemini-1.5-flash' },
-  { id: 'groq', name: 'Groq', defaultModel: 'llama3-8b-8192' },
+  { id: 'groq', name: 'Groq', defaultModel: 'llama-3.3-70b-versatile' },
   { id: 'openrouter', name: 'OpenRouter', defaultModel: 'google/gemini-flash-1.5' },
 ];
 

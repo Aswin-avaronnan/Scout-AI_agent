@@ -116,13 +116,14 @@ async def simulate_interview(
     eval_prompt = (
         "The interview is complete. Evaluate this candidate based on their answers and background. "
         "Calculate a technical depth score (0-100) and a communication score (0-100).\n"
-        "Respond ONLY with a valid JSON object matching this schema:\n"
-        "{\n"
-        '  "technical_depth": int,\n'
-        '  "communication": int,\n'
-        '  "red_flags": ["string"],\n'
-        '  "hire_recommendation": "Strong Hire" | "Hire" | "No Hire" | "Strong No Hire"\n'
-        "}"
+        "Respond with ONLY a valid JSON object and nothing else — no markdown code fences, "
+        "no preamble, no explanation outside the JSON.\n"
+        "Respond with exactly this JSON shape, filled in with your real assessment "
+        "(this is an example only, not real values):\n"
+        '{"technical_depth": 68, "communication": 74, '
+        '"red_flags": ["Struggled to explain trade-offs in the caching question"], '
+        '"hire_recommendation": "Hire"}\n'
+        '"hire_recommendation" must be exactly one of: "Strong Hire", "Hire", "No Hire", "Strong No Hire".'
     )
     
     # Combine the eval prompt with the last user message to keep the alternating role sequence
@@ -144,12 +145,19 @@ async def simulate_interview(
     )
 
     try:
-        match = re.search(r"(\{.*\})", eval_response, re.DOTALL)
-        if match:
-            clean_json = match.group(1)
-            eval_data = json.loads(clean_json)
-        else:
+        cleaned = eval_response.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+
+        match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
+        if not match:
             raise ValueError("No JSON object found in response")
+
+        clean_json = match.group(1)
+        try:
+            eval_data = json.loads(clean_json)
+        except json.JSONDecodeError:
+            eval_data = json.loads(clean_json.replace("'", '"'))
     except Exception as e:
         eval_data = {
             "technical_depth": 50,

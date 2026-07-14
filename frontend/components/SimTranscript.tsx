@@ -43,6 +43,10 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
       simulation_eval: null
     });
 
+    // Local accumulator, independent of React state timing, so the eval
+    // handler below always has the true, up-to-date transcript to persist.
+    const collectedTurns: { turn_index: number; speaker: 'interviewer' | 'candidate'; text: string }[] = [];
+
     const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:7860';
     
     try {
@@ -94,6 +98,13 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
 
           if (event.type === 'turn') {
             const turn = event.data;
+            const alreadyCollected = collectedTurns.some(
+              t => t.turn_index === turn.turn_index && t.speaker === turn.speaker
+            );
+            if (!alreadyCollected) {
+              collectedTurns.push(turn);
+            }
+
             setLocalTranscript((prev) => {
               // Ensure we don't add duplicate turns
               const exists = prev.some(t => t.turn_index === turn.turn_index && t.speaker === turn.speaker);
@@ -112,7 +123,7 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
             updateCandidateSim(candidate.id, {
               simulation_status: 'completed',
               simulation_eval: evalData,
-              simulation_transcript: localTranscript // Store completed transcript
+              simulation_transcript: collectedTurns // Correct, up-to-date transcript
             });
             
             // Advance candidate stage to simulated

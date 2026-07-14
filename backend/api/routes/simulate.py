@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from typing import Optional
 import json
 import asyncio
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from backend.llm.client import get_client
 from backend.tools.jd_parser import ParsedJD
 from backend.tools.github_scout import GitHubScout
@@ -11,10 +11,12 @@ from backend.agent.simulation import simulate_interview
 
 router = APIRouter()
 
+MAX_SIMULATION_TURNS = 10
+
 class SimulateRequest(BaseModel):
     jd: ParsedJD
     candidate_username: str
-    num_turns: Optional[int] = 3
+    num_turns: Optional[int] = Field(3, ge=1, le=MAX_SIMULATION_TURNS)
     provider: str = "openai"
     model: Optional[str] = None
 

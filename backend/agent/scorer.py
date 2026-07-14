@@ -13,7 +13,8 @@ class Scorer:
         system_prompt = (
             "You are a technical recruiting expert. Compare a job description with a candidate's GitHub profile. "
             "Calculate a match score from 0 to 100. "
-            "Respond ONLY with a valid JSON object."
+            "Respond with ONLY a valid JSON object and nothing else — no markdown code fences, "
+            "no preamble, no explanation outside the JSON."
         )
 
         user_prompt = (
@@ -26,7 +27,11 @@ class Scorer:
             f"Top Languages: {', '.join(candidate.top_languages)}\n"
             f"Public Repos: {candidate.profile.public_repos}\n"
             f"Recent Repos: {', '.join([r.name for r in candidate.repos[:5]])}\n\n"
-            f"Return JSON: {{'score': float, 'reasoning': str, 'skill_match': List[str], 'missing_skills': List[str]}}"
+            f"Respond with exactly this JSON shape, filled in with your real assessment "
+            f"(this is an example only, not real values):\n"
+            f'{{"score": 72, "reasoning": "Strong match on backend and Python experience, '
+            f'limited evidence of cloud deployment work", "skill_match": ["Python", "Docker"], '
+            f'"missing_skills": ["Kubernetes"]}}'
         )
 
         response_text = await self.llm.complete(
@@ -36,10 +41,19 @@ class Scorer:
             temperature=0.1
         )
 
-        # Improved JSON extraction via regex
-        match = re.search(r"(\{.*\})", response_text, re.DOTALL)
+        # Strip markdown code fences some models wrap JSON in despite instructions not to
+        cleaned = response_text.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+
+        match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
         if not match:
-            raise ValueError("Could not find JSON object in LLM response")
-        
+            snippet = response_text[:200].replace("\n", " ")
+            raise ValueError(f"Could not find JSON object in LLM response. Model said: \"{snippet}\"")
+
         clean_json = match.group(1)
-        return json.loads(clean_json)
+        try:
+            return json.loads(clean_json)
+        except json.JSONDecodeError:
+            repaired = clean_json.replace("'", '"')
+            return json.loads(repaired)

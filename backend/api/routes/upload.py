@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Header, HTTPException, UploadFile, File, Form
 from typing import Optional, List
 import json
@@ -13,7 +14,22 @@ from backend.tools.file_ingest import (
     parse_candidates_json
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB — matches the limit already advertised in the UI
+MAX_CANDIDATES_PER_SHEET = 100
+
+async def _read_file_with_limit(file: UploadFile, max_bytes: int) -> bytes:
+    """Reads an UploadFile's bytes, rejecting anything over max_bytes.
+    Enforced server-side — the frontend's 'Max 10MB' label was previously cosmetic only."""
+    data = await file.read()
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum allowed size is {max_bytes // (1024 * 1024)}MB."
+        )
+    return data
 
 @router.post("/upload/resume")
 async def upload_resume(
@@ -32,8 +48,8 @@ async def upload_resume(
         raise HTTPException(status_code=400, detail="Only PDF resumes are supported.")
         
     try:
-        # Read file bytes
-        file_bytes = await file.read()
+        # Read file bytes, enforcing the server-side size cap
+        file_bytes = await _read_file_with_limit(file, MAX_UPLOAD_BYTES)
         
         # 1. Convert PDF to Markdown
         md_text = pdf_to_markdown(file_bytes)
@@ -111,8 +127,12 @@ async def upload_resume(
         
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException:
+        # Let intentional HTTP errors (e.g. 413 file-too-large) pass through as-is
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process resume: {str(e)}")
+        logger.exception("upload_resume failed")
+        raise HTTPException(status_code=500, detail="Failed to process resume. Please check the file and try again.")
 
 @router.post("/upload/candidates")
 async def upload_candidates(
@@ -135,13 +155,20 @@ async def upload_candidates(
         raise HTTPException(status_code=400, detail="Only CSV or JSON candidate sheets are supported.")
         
     try:
-        file_bytes = await file.read()
+        file_bytes = await _read_file_with_limit(file, MAX_UPLOAD_BYTES)
         
         # 1. Parse sheets
         if is_csv:
             candidate_list = parse_candidates_csv(file_bytes)
         else:
             candidate_list = parse_candidates_json(file_bytes)
+
+        if len(candidate_list) > MAX_CANDIDATES_PER_SHEET:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Too many candidates in sheet ({len(candidate_list)}). "
+                       f"Maximum allowed is {MAX_CANDIDATES_PER_SHEET} per upload."
+            )
             
         # 2. Init LLM & Parse JD
         llm = get_client(provider, x_user_api_key, model=model)
@@ -212,5 +239,9 @@ async def upload_candidates(
         
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException:
+        # Let intentional HTTP errors (e.g. 413 too-large/too-many) pass through as-is
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process candidates list: {str(e)}")
+        logger.exception("upload_candidates failed")
+        raise HTTPException(status_code=500, detail="Failed to process candidates list. Please check the file and try again.")

@@ -50,7 +50,7 @@ class AnthropicClient(LLMClient):
 class GeminiClient(LLMClient):
     def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model)
+        self.model_name = model
 
     async def complete(self, messages, system=None, max_tokens=1000, temperature=0.7):
         # Gemini expects different format, simple map for now
@@ -58,27 +58,26 @@ class GeminiClient(LLMClient):
         for m in messages[:-1]:
             role = "user" if m["role"] == "user" else "model"
             history.append({"role": role, "parts": [m["content"]]})
-        
-        chat = self.model.start_chat(history=history)
+
+        # Build the model per-call with system_instruction set properly, so it
+        # grounds every turn in the conversation (not just the final message).
+        model = genai.GenerativeModel(self.model_name, system_instruction=system)
+        chat = model.start_chat(history=history)
         last_msg = messages[-1]["content"]
-        
+
         config = genai.types.GenerationConfig(
             max_output_tokens=max_tokens,
             temperature=temperature
         )
-        
-        # System instruction handled at model init usually, 
-        # but for per-call flexibility we can prepend to prompt if needed
-        prompt = f"System: {system}\n\n{last_msg}" if system else last_msg
-        
-        response = await chat.send_message_async(prompt, generation_config=config)
+
+        response = await chat.send_message_async(last_msg, generation_config=config)
         return response.text
 
 def get_client(provider: str, api_key: str, model: Optional[str] = None) -> LLMClient:
     if provider == "openai":
         return OpenAICompatibleClient(api_key, model=model or "gpt-4o-mini")
     elif provider == "groq":
-        return OpenAICompatibleClient(api_key, base_url="https://api.groq.com/openai/v1", model=model or "llama3-8b-8192")
+        return OpenAICompatibleClient(api_key, base_url="https://api.groq.com/openai/v1", model=model or "llama-3.3-70b-versatile")
     elif provider == "openrouter":
         return OpenAICompatibleClient(api_key, base_url="https://openrouter.ai/api/v1", model=model or "google/gemini-flash-1.5")
     elif provider == "anthropic":

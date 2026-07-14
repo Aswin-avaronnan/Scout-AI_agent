@@ -1,16 +1,21 @@
+import logging
 from fastapi import APIRouter, Header, HTTPException, Body
 from typing import List, Optional
+from pydantic import BaseModel, Field
 from backend.llm.client import get_client
 from backend.tools.jd_parser import parse_jd
 from backend.tools.github_scout import GitHubScout
 from backend.agent.scorer import Scorer
-from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
+MAX_CANDIDATES_PER_REQUEST = 25
+MAX_JD_TEXT_CHARS = 20_000
+
 class ScoutRequest(BaseModel):
-    jd_text: str
-    github_usernames: List[str]
+    jd_text: str = Field(..., min_length=1, max_length=MAX_JD_TEXT_CHARS)
+    github_usernames: List[str] = Field(..., min_length=1, max_length=MAX_CANDIDATES_PER_REQUEST)
     provider: str = "openai"
     model: Optional[str] = None
 
@@ -48,6 +53,9 @@ async def scout_candidates(
                     "missing_skills": match_eval["missing_skills"]
                 }
             except Exception as e:
+                # Per-candidate errors are shown to the requesting user for their own
+                # submitted usernames, so surfacing the message here is intentional UX,
+                # not a cross-user information leak.
                 return {
                     "username": username,
                     "error": str(e)
@@ -62,4 +70,7 @@ async def scout_candidates(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the real error server-side; never echo internal exception details
+        # (library internals, provider payloads, file paths) back to the client.
+        logger.exception("scout_candidates failed")
+        raise HTTPException(status_code=500, detail="Scouting pipeline failed. Please check your inputs and try again.")

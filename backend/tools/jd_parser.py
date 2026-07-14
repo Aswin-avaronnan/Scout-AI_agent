@@ -16,23 +16,41 @@ import re
 async def parse_jd(llm: LLMClient, jd_text: str) -> ParsedJD:
     system_prompt = (
         "You are an expert technical recruiter. Extract structured data from the job description provided. "
-        "Respond ONLY with a valid JSON object matching the requested schema."
+        "Respond with ONLY a valid JSON object and nothing else — no markdown code fences, "
+        "no preamble, no explanation outside the JSON."
     )
-    
-    user_prompt = f"Job Description:\n{jd_text}\n\nReturn JSON with keys: job_title, skills_required, experience_years, summary, domain."
-    
+
+    user_prompt = (
+        f"Job Description:\n{jd_text}\n\n"
+        f"Respond with exactly this JSON shape, filled in with your real extraction "
+        f"(this is an example only, not real values):\n"
+        f'{{"job_title": "Senior Backend Engineer", "skills_required": ["Python", "FastAPI", "Docker"], '
+        f'"experience_years": 4, "summary": "A two to three sentence summary of the role.", '
+        f'"domain": "AI Infrastructure"}}'
+    )
+
     response_text = await llm.complete(
         messages=[{"role": "user", "content": user_prompt}],
         system=system_prompt,
         max_tokens=1000,
         temperature=0.1
     )
-    
-    # Improved JSON extraction via regex
-    match = re.search(r"(\{.*\})", response_text, re.DOTALL)
+
+    # Strip markdown code fences some models wrap JSON in despite instructions not to
+    cleaned = response_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+
+    match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
     if not match:
-        raise ValueError("Could not find JSON object in LLM response")
-    
+        snippet = response_text[:200].replace("\n", " ")
+        raise ValueError(f"Could not find JSON object in LLM response. Model said: \"{snippet}\"")
+
     clean_json = match.group(1)
-    data = json.loads(clean_json)
+    try:
+        data = json.loads(clean_json)
+    except json.JSONDecodeError:
+        repaired = clean_json.replace("'", '"')
+        data = json.loads(repaired)
+
     return ParsedJD(**data)
