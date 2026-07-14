@@ -28,7 +28,8 @@ class Scorer:
             f"Public Repos: {candidate.profile.public_repos}\n"
             f"Recent Repos: {', '.join([r.name for r in candidate.repos[:5]])}\n\n"
             f"Respond with exactly this JSON shape, filled in with your real assessment "
-            f"(this is an example only, not real values):\n"
+            f"(this is an example only, not real values). Keep \"reasoning\" to one concise "
+            f"sentence, under 30 words, regardless of how much GitHub activity the candidate has:\n"
             f'{{"score": 72, "reasoning": "Strong match on backend and Python experience, '
             f'limited evidence of cloud deployment work", "skill_match": ["Python", "Docker"], '
             f'"missing_skills": ["Kubernetes"]}}'
@@ -37,7 +38,7 @@ class Scorer:
         response_text = await self.llm.complete(
             messages=[{"role": "user", "content": user_prompt}],
             system=system_prompt,
-            max_tokens=1000,
+            max_tokens=1500,
             temperature=0.1
         )
 

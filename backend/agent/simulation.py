@@ -123,7 +123,8 @@ async def simulate_interview(
         '{"technical_depth": 68, "communication": 74, '
         '"red_flags": ["Struggled to explain trade-offs in the caching question"], '
         '"hire_recommendation": "Hire"}\n'
-        '"hire_recommendation" must be exactly one of: "Strong Hire", "Hire", "No Hire", "Strong No Hire".'
+        '"hire_recommendation" must be exactly one of: "Strong Hire", "Hire", "No Hire", "Strong No Hire". '
+        'Keep each red_flag entry under 20 words, and list at most 3.'
     )
     
     # Combine the eval prompt with the last user message to keep the alternating role sequence
@@ -140,7 +141,7 @@ async def simulate_interview(
     eval_response = await llm.complete(
         messages=eval_messages,
         system=system_prompt_a,
-        max_tokens=600,
+        max_tokens=1000,
         temperature=0.2
     )
 

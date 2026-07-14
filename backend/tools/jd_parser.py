@@ -23,7 +23,7 @@ async def parse_jd(llm: LLMClient, jd_text: str) -> ParsedJD:
     user_prompt = (
         f"Job Description:\n{jd_text}\n\n"
         f"Respond with exactly this JSON shape, filled in with your real extraction "
-        f"(this is an example only, not real values):\n"
+        f"(this is an example only, not real values). Keep \"summary\" to 2-3 sentences maximum:\n"
         f'{{"job_title": "Senior Backend Engineer", "skills_required": ["Python", "FastAPI", "Docker"], '
         f'"experience_years": 4, "summary": "A two to three sentence summary of the role.", '
         f'"domain": "AI Infrastructure"}}'
@@ -32,7 +32,7 @@ async def parse_jd(llm: LLMClient, jd_text: str) -> ParsedJD:
     response_text = await llm.complete(
         messages=[{"role": "user", "content": user_prompt}],
         system=system_prompt,
-        max_tokens=1000,
+        max_tokens=1500,
         temperature=0.1
     )
 
