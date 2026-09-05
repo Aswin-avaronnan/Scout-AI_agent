@@ -2,8 +2,8 @@ import React from 'react';
 import './globals.css';
 
 export const metadata = {
-  title: 'Catalyst Scout v2',
-  description: 'AI-powered technical recruiting assistant',
+  title: 'Catalyst Scout — AI Technical Recruiting Agent',
+  description: 'Parse job descriptions, scout GitHub profiles, run AI interview simulations, and rank candidates. Bring your own API key. No data stored.',
 }
 
 export default function RootLayout({

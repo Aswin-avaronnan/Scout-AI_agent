@@ -49,3 +49,6 @@ yarn-error.log*
 .pnpm-debug.log*
 .env*.local
 .vercel
+skills-lock.json
+ACTIONPLAN-ASAP.md
+*.tsbuildinfo

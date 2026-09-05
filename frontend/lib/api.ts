@@ -20,9 +20,25 @@ export async function fetchBackend(endpoint: string, options: any = {}) {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'API request failed');
+    // Safely parse error — backend may return JSON detail or HTML (e.g. Cloudflare 502)
+    let message = `Request failed: ${response.status} ${response.statusText}`;
+    try {
+      const errorBody = await response.json();
+      if (errorBody.detail) {
+        message = Array.isArray(errorBody.detail)
+          ? errorBody.detail.map((e: any) => e.msg).join(', ')
+          : String(errorBody.detail);
+      }
+    } catch {
+      // Non-JSON body (HTML gateway error, etc.) — fall back to plain text
+      try {
+        const text = await response.text();
+        if (text) message = `Server error (${response.status}): ${text.slice(0, 200)}`;
+      } catch { /* ignore */ }
+    }
+    throw new Error(message);
   }
 
   return response.json();
 }
+
