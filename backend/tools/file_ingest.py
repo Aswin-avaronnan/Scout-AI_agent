@@ -57,7 +57,7 @@ async def parse_resume_md(llm: LLMClient, md_text: str) -> ExtractedResumeProfil
     response_text = await llm.complete(
         messages=[{"role": "user", "content": user_prompt}],
         system=system_prompt,
-        max_tokens=1000,
+        max_tokens=2500,
         temperature=0.1
     )
     

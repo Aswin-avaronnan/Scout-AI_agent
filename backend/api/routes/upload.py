@@ -82,86 +82,88 @@ async def upload_resume(
 
         scorer = Scorer(llm)
         gh_scout = GitHubScout(token=x_github_token)
+        sem = asyncio.Semaphore(3)
 
         # 2. Worker to process a single resume file
         async def process_single_resume(resume_file: UploadFile) -> dict:
-            filename = resume_file.filename or "resume.pdf"
-            if not filename.lower().endswith(".pdf"):
-                return {
-                    "filename": filename,
-                    "error": f"File '{filename}' is not a PDF. Only PDF resumes are supported."
-                }
-                
-            try:
-                # Read file bytes with limit check
-                file_bytes = await _read_file_with_limit(resume_file, MAX_UPLOAD_BYTES)
-                
-                # Convert PDF to Markdown
-                md_text = pdf_to_markdown(file_bytes)
-                
-                # Parse resume profile via LLM
-                extracted_profile = await parse_resume_md(llm, md_text)
-                
-                # Check for GitHub link only if enrichment is enabled
-                gh_username = None
-                if is_enrich_enabled and extracted_profile.github_url:
-                    import re
-                    url_match = re.search(r"github\.com/([^/]+)", extracted_profile.github_url)
-                    if url_match:
-                        gh_username = url_match.group(1)
-                
-                candidate_data = None
-                top_languages = []
-                github_found = False
-                
-                if gh_username and is_enrich_enabled:
-                    try:
-                        candidate_data = await gh_scout.get_candidate_data(gh_username)
-                        top_languages = candidate_data.top_languages
-                        github_found = True
-                    except Exception:
-                        pass
+            async with sem:
+                filename = resume_file.filename or "resume.pdf"
+                if not filename.lower().endswith(".pdf"):
+                    return {
+                        "filename": filename,
+                        "error": f"File '{filename}' is not a PDF. Only PDF resumes are supported."
+                    }
+                    
+                try:
+                    # Read file bytes with limit check
+                    file_bytes = await _read_file_with_limit(resume_file, MAX_UPLOAD_BYTES)
+                    
+                    # Convert PDF to Markdown
+                    md_text = pdf_to_markdown(file_bytes)
+                    
+                    # Parse resume profile via LLM
+                    extracted_profile = await parse_resume_md(llm, md_text)
+                    
+                    # Check for GitHub link only if enrichment is enabled
+                    gh_username = None
+                    if is_enrich_enabled and extracted_profile.github_url:
+                        import re
+                        url_match = re.search(r"github\.com/([^/]+)", extracted_profile.github_url)
+                        if url_match:
+                            gh_username = url_match.group(1)
+                    
+                    candidate_data = None
+                    top_languages = []
+                    github_found = False
+                    
+                    if gh_username and is_enrich_enabled:
+                        try:
+                            candidate_data = await gh_scout.get_candidate_data(gh_username)
+                            top_languages = candidate_data.top_languages
+                            github_found = True
+                        except Exception:
+                            pass
 
-                if not candidate_data:
-                    import uuid
-                    resume_identifier = gh_username or f"resume-{uuid.uuid4().hex[:8]}"
-                    profile = GitHubProfile(
-                        username=resume_identifier,
-                        name=extracted_profile.name,
-                        bio=extracted_profile.bio,
-                        location="Not provided (resume-only)",
-                        public_repos=0,
-                        followers=0,
-                        following=0,
-                        html_url=extracted_profile.github_url or "",
-                        avatar_url=""
-                    )
-                    candidate_data = GitHubCandidateData(
-                        profile=profile,
-                        repos=[],
-                        top_languages=extracted_profile.skills[:5]
-                    )
-                    top_languages = extracted_profile.skills[:5]
+                    if not candidate_data:
+                        import uuid
+                        resume_identifier = gh_username or f"resume-{uuid.uuid4().hex[:8]}"
+                        profile = GitHubProfile(
+                            username=resume_identifier,
+                            name=extracted_profile.name,
+                            bio=extracted_profile.bio,
+                            location="Not provided (resume-only)",
+                            public_repos=0,
+                            followers=0,
+                            following=0,
+                            html_url=extracted_profile.github_url or "",
+                            avatar_url=""
+                        )
+                        candidate_data = GitHubCandidateData(
+                            profile=profile,
+                            repos=[],
+                            top_languages=extracted_profile.skills[:5]
+                        )
+                        top_languages = extracted_profile.skills[:5]
 
-                match_eval = await scorer.calculate_match_score(parsed_jd, candidate_data)
+                    match_eval = await scorer.calculate_match_score(parsed_jd, candidate_data)
 
-                return {
-                    "username": candidate_data.profile.username,
-                    "profile": candidate_data.profile.model_dump(),
-                    "top_languages": top_languages,
-                    "github_found": github_found,
-                    "match_score": match_eval["score"],
-                    "reasoning": match_eval["reasoning"],
-                    "skill_match": match_eval["skill_match"],
-                    "missing_skills": match_eval["missing_skills"],
-                    "filename": filename
-                }
-            except Exception as e:
-                logger.warning(f"Failed to process resume '{filename}': {e}")
-                return {
-                    "filename": filename,
-                    "error": str(e)
-                }
+                    return {
+                        "username": candidate_data.profile.username,
+                        "profile": candidate_data.profile.model_dump(),
+                        "top_languages": top_languages,
+                        "github_found": github_found,
+                        "match_score": match_eval["score"],
+                        "reasoning": match_eval["reasoning"],
+                        "skill_match": match_eval["skill_match"],
+                        "missing_skills": match_eval["missing_skills"],
+                        "filename": filename
+                    }
+                except Exception as e:
+                    logger.warning(f"Failed to process resume '{filename}': {e}")
+                    return {
+                        "filename": filename,
+                        "error": str(e)
+                    }
 
         # 3. Process all resumes concurrently
         tasks = [process_single_resume(f) for f in upload_list]

@@ -1,9 +1,28 @@
 import abc
+import asyncio
+import logging
 from typing import List, Dict, Any, Optional
 import httpx
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 import google.generativeai as genai
+
+logger = logging.getLogger(__name__)
+
+async def _call_with_retry(func, max_retries: int = 3, initial_delay: float = 2.0):
+    delay = initial_delay
+    for attempt in range(max_retries + 1):
+        try:
+            return await func()
+        except Exception as e:
+            err_str = str(e).lower()
+            is_rate_limit = any(k in err_str for k in ("429", "quota", "rate limit", "resource_exhausted", "exceeded your current quota", "too many requests"))
+            if is_rate_limit and attempt < max_retries:
+                logger.warning(f"LLM API rate limit / quota hit (attempt {attempt + 1}/{max_retries + 1}). Retrying in {delay}s...")
+                await asyncio.sleep(delay)
+                delay *= 2.0
+            else:
+                raise e
 
 class LLMClient(abc.ABC):
     @abc.abstractmethod
@@ -11,7 +30,7 @@ class LLMClient(abc.ABC):
         self, 
         messages: List[Dict[str, str]], 
         system: Optional[str] = None, 
-        max_tokens: int = 1000,
+        max_tokens: int = 2000,
         temperature: float = 0.7
     ) -> str:
         pass
@@ -21,57 +40,60 @@ class OpenAICompatibleClient(LLMClient):
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.model = model
 
-    async def complete(self, messages, system=None, max_tokens=1000, temperature=0.7):
-        payload = [{"role": "system", "content": system}] if system else []
-        payload.extend(messages)
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=payload,
-            max_tokens=max_tokens,
-            temperature=temperature
-        )
-        return response.choices[0].message.content
+    async def complete(self, messages, system=None, max_tokens=2000, temperature=0.7):
+        async def _do_call():
+            payload = [{"role": "system", "content": system}] if system else []
+            payload.extend(messages)
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=payload,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+            return response.choices[0].message.content
+        return await _call_with_retry(_do_call)
 
 class AnthropicClient(LLMClient):
     def __init__(self, api_key: str, model: str = "claude-3-haiku-20240307"):
         self.client = AsyncAnthropic(api_key=api_key)
         self.model = model
 
-    async def complete(self, messages, system=None, max_tokens=1000, temperature=0.7):
-        response = await self.client.messages.create(
-            model=self.model,
-            system=system if system else "",
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature
-        )
-        return response.content[0].text
+    async def complete(self, messages, system=None, max_tokens=2000, temperature=0.7):
+        async def _do_call():
+            response = await self.client.messages.create(
+                model=self.model,
+                system=system if system else "",
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+            return response.content[0].text
+        return await _call_with_retry(_do_call)
 
 class GeminiClient(LLMClient):
     def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
         genai.configure(api_key=api_key)
         self.model_name = model
 
-    async def complete(self, messages, system=None, max_tokens=1000, temperature=0.7):
-        # Gemini expects different format, simple map for now
-        history = []
-        for m in messages[:-1]:
-            role = "user" if m["role"] == "user" else "model"
-            history.append({"role": role, "parts": [m["content"]]})
+    async def complete(self, messages, system=None, max_tokens=2000, temperature=0.7):
+        async def _do_call():
+            history = []
+            for m in messages[:-1]:
+                role = "user" if m["role"] == "user" else "model"
+                history.append({"role": role, "parts": [m["content"]]})
 
-        # Build the model per-call with system_instruction set properly, so it
-        # grounds every turn in the conversation (not just the final message).
-        model = genai.GenerativeModel(self.model_name, system_instruction=system)
-        chat = model.start_chat(history=history)
-        last_msg = messages[-1]["content"]
+            model = genai.GenerativeModel(self.model_name, system_instruction=system)
+            chat = model.start_chat(history=history)
+            last_msg = messages[-1]["content"]
 
-        config = genai.types.GenerationConfig(
-            max_output_tokens=max_tokens,
-            temperature=temperature
-        )
+            config = genai.types.GenerationConfig(
+                max_output_tokens=max_tokens,
+                temperature=temperature
+            )
 
-        response = await chat.send_message_async(last_msg, generation_config=config)
-        return response.text
+            response = await chat.send_message_async(last_msg, generation_config=config)
+            return response.text
+        return await _call_with_retry(_do_call)
 
 def get_client(provider: str, api_key: str, model: Optional[str] = None) -> LLMClient:
     if provider == "openai":
