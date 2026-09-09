@@ -26,14 +26,34 @@ async def simulate_endpoint(
     x_user_api_key: str = Header(...),
     x_github_token: Optional[str] = Header(None)
 ):
-    try:
-        # 1. Fetch Candidate Data on the fly to get full repositories
-        gh_scout = GitHubScout(token=x_github_token)
-        candidate_data = await gh_scout.get_candidate_data(request.candidate_username)
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to fetch candidate GitHub details: {str(e)}"
+    # 1. Fetch Candidate Data on the fly (skip GitHub API call if it's a synthetic resume identifier)
+    candidate_data = None
+    is_resume_id = request.candidate_username.startswith("resume-")
+    
+    if not is_resume_id:
+        try:
+            gh_scout = GitHubScout(token=x_github_token)
+            candidate_data = await gh_scout.get_candidate_data(request.candidate_username)
+        except Exception as e:
+            logger.warning(f"GitHub lookup skipped/failed during simulation for '{request.candidate_username}': {e}")
+
+    if not candidate_data:
+        from backend.tools.github_scout import GitHubProfile, GitHubCandidateData
+        profile = GitHubProfile(
+            username=request.candidate_username,
+            name=request.candidate_username,
+            bio="Candidate profile sourced from uploaded resume / candidate data.",
+            location="Not provided",
+            public_repos=0,
+            followers=0,
+            following=0,
+            html_url="",
+            avatar_url=""
+        )
+        candidate_data = GitHubCandidateData(
+            profile=profile,
+            repos=[],
+            top_languages=[]
         )
 
     try:

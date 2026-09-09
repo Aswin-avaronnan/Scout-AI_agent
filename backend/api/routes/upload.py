@@ -31,6 +31,13 @@ async def _read_file_with_limit(file: UploadFile, max_bytes: int) -> bytes:
         )
     return data
 
+def _normalize_bool(val: Any) -> bool:
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.strip().lower() in ("true", "1", "yes", "on")
+    return bool(val)
+
 @router.post("/upload/resume")
 async def upload_resume(
     files: List[UploadFile] = File(None),
@@ -38,7 +45,7 @@ async def upload_resume(
     jd_text: str = Form(...),
     provider: str = Form("openai"),
     model: Optional[str] = Form(None),
-    enrich_github: bool = Form(True),
+    enrich_github: Any = Form(True),
     max_resumes: Optional[int] = Form(None),
     x_user_api_key: str = Header(...),
     x_github_token: Optional[str] = Header(None)
@@ -48,6 +55,8 @@ async def upload_resume(
     optionally scouts GitHub if a profile is present and enrich_github is True,
     and returns formatted candidate records for all uploaded resumes.
     """
+    is_enrich_enabled = _normalize_bool(enrich_github)
+
     upload_list: List[UploadFile] = []
     if files:
         upload_list.extend(files)
@@ -93,9 +102,9 @@ async def upload_resume(
                 # Parse resume profile via LLM
                 extracted_profile = await parse_resume_md(llm, md_text)
                 
-                # Check for GitHub link
+                # Check for GitHub link only if enrichment is enabled
                 gh_username = None
-                if enrich_github and extracted_profile.github_url:
+                if is_enrich_enabled and extracted_profile.github_url:
                     import re
                     url_match = re.search(r"github\.com/([^/]+)", extracted_profile.github_url)
                     if url_match:
@@ -105,7 +114,7 @@ async def upload_resume(
                 top_languages = []
                 github_found = False
                 
-                if gh_username:
+                if gh_username and is_enrich_enabled:
                     try:
                         candidate_data = await gh_scout.get_candidate_data(gh_username)
                         top_languages = candidate_data.top_languages
@@ -177,6 +186,7 @@ async def upload_candidates(
     jd_text: str = Form(...),
     provider: str = Form("openai"),
     model: Optional[str] = Form(None),
+    enrich_github: Any = Form(True),
     x_user_api_key: str = Header(...),
     x_github_token: Optional[str] = Header(None)
 ):
@@ -187,6 +197,7 @@ async def upload_candidates(
     filename = file.filename.lower()
     is_csv = filename.endswith(".csv")
     is_json = filename.endswith(".json")
+    is_enrich_enabled = _normalize_bool(enrich_github)
     
     if not (is_csv or is_json):
         raise HTTPException(status_code=400, detail="Only CSV or JSON candidate sheets are supported.")
@@ -218,31 +229,44 @@ async def upload_candidates(
         async def process_candidate(candidate_entry):
             username = candidate_entry["username"]
             display_name = candidate_entry.get("name")
-            try:
-                candidate_data = await gh_scout.get_candidate_data(username)
-                match_eval = await scorer.calculate_match_score(parsed_jd, candidate_data)
-                
-                return {
-                    "username": username,
-                    "profile": candidate_data.profile.model_dump(),
-                    "top_languages": candidate_data.top_languages,
-                    "match_score": match_eval["score"],
-                    "reasoning": match_eval["reasoning"],
-                    "skill_match": match_eval["skill_match"],
-                    "missing_skills": match_eval["missing_skills"]
-                }
-            except Exception as e:
-                # If GitHub lookup fails, create basic profile card using sheet data
+            
+            candidate_data = None
+            if is_enrich_enabled:
+                try:
+                    candidate_data = await gh_scout.get_candidate_data(username)
+                except Exception:
+                    pass
+
+            if candidate_data:
+                try:
+                    match_eval = await scorer.calculate_match_score(parsed_jd, candidate_data)
+                    return {
+                        "username": username,
+                        "profile": candidate_data.profile.model_dump(),
+                        "top_languages": candidate_data.top_languages,
+                        "github_found": True,
+                        "match_score": match_eval["score"],
+                        "reasoning": match_eval["reasoning"],
+                        "skill_match": match_eval["skill_match"],
+                        "missing_skills": match_eval["missing_skills"]
+                    }
+                except Exception as inner_e:
+                    return {
+                        "username": username,
+                        "error": f"Failed to score candidate: {str(inner_e)}"
+                    }
+            else:
+                # Basic candidate profile constructed from sheet without calling GitHub API
                 try:
                     profile = GitHubProfile(
                         username=username,
                         name=display_name or username,
-                        bio=f"Failed to load from GitHub: {str(e)}",
+                        bio="Sheet candidate (GitHub enrichment disabled or unavailable)",
                         location="Unknown",
                         public_repos=0,
                         followers=0,
                         following=0,
-                        html_url=f"https://github.com/{username}",
+                        html_url=candidate_entry.get("github_url") or f"https://github.com/{username}",
                         avatar_url=""
                     )
                     dummy_candidate = GitHubCandidateData(
@@ -255,6 +279,7 @@ async def upload_candidates(
                         "username": username,
                         "profile": profile.model_dump(),
                         "top_languages": [],
+                        "github_found": False,
                         "match_score": match_eval["score"],
                         "reasoning": match_eval["reasoning"],
                         "skill_match": match_eval["skill_match"],
@@ -263,7 +288,7 @@ async def upload_candidates(
                 except Exception as inner_e:
                     return {
                         "username": username,
-                        "error": f"Failed to scout or score candidate: {str(inner_e)}"
+                        "error": f"Failed to process candidate: {str(inner_e)}"
                     }
                     
         tasks = [process_candidate(c) for c in candidate_list]

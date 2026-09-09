@@ -149,6 +149,7 @@ export function JDInput() {
           });
         } else {
           formData.append('file', selectedFiles[0]);
+          formData.append('enrich_github', String(enrichGithub));
         }
         
         const endpoint = activeTab === 'resume' ? '/upload/resume' : '/upload/candidates';
@@ -398,8 +399,7 @@ export function JDInput() {
                         Enrich with live GitHub data
                       </span>
                       <span className="text-[10px] text-zinc-500 leading-normal block mt-0.5">
-                        If a GitHub link is found on the resume, fetch their real profile, repos, and
-                        languages. Turn this off to score from resume text alone.
+                        If enabled, fetch real GitHub profiles, repos, and languages. Turn this off to score from resume/sheet data alone — avoiding GitHub API rate limits.
                       </span>
                     </div>
                   </label>
@@ -407,9 +407,28 @@ export function JDInput() {
               )}
 
               {activeTab === 'sheet' && (
-                <p className="text-[10px] text-zinc-600 leading-normal">
-                  💡 **CSV Schema Tip:** Ensure your sheet has a column labeled <span className="text-zinc-400 font-mono font-bold">username</span>, <span className="text-zinc-400 font-mono font-bold">github_username</span>, or <span className="text-zinc-400 font-mono font-bold">github_url</span>. Any additional columns (e.g. name) will be parsed and enriched automatically.
-                </p>
+                <div className="space-y-3">
+                  <label className="flex items-start gap-3 bg-zinc-900/40 border border-zinc-850 p-4 rounded-lg cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enrichGithub}
+                      onChange={(e) => setEnrichGithub(e.target.checked)}
+                      className="mt-0.5 accent-white h-4 w-4"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-white block">
+                        Enrich candidates with live GitHub data
+                      </span>
+                      <span className="text-[10px] text-zinc-500 leading-normal block mt-0.5">
+                        If enabled, fetch real GitHub profiles for each candidate. Turn this off to score candidates directly from the sheet without calling the GitHub API.
+                      </span>
+                    </div>
+                  </label>
+
+                  <p className="text-[10px] text-zinc-600 leading-normal">
+                    💡 **CSV Schema Tip:** Ensure your sheet has a column labeled <span className="text-zinc-400 font-mono font-bold">username</span>, <span className="text-zinc-400 font-mono font-bold">github_username</span>, or <span className="text-zinc-400 font-mono font-bold">github_url</span>. Any additional columns (e.g. name) will be parsed automatically.
+                  </p>
+                </div>
               )}
             </div>
           )}

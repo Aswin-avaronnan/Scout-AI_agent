@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from backend.llm.client import LLMClient
 from backend.tools.jd_parser import ParsedJD
 from backend.tools.github_scout import GitHubCandidateData
+from backend.tools.json_utils import extract_json_from_llm_response
 import json
 import re
 
@@ -42,19 +43,4 @@ class Scorer:
             temperature=0.1
         )
 
-        # Strip markdown code fences some models wrap JSON in despite instructions not to
-        cleaned = response_text.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-
-        match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
-        if not match:
-            snippet = response_text[:200].replace("\n", " ")
-            raise ValueError(f"Could not find JSON object in LLM response. Model said: \"{snippet}\"")
-
-        clean_json = match.group(1)
-        try:
-            return json.loads(clean_json)
-        except json.JSONDecodeError:
-            repaired = clean_json.replace("'", '"')
-            return json.loads(repaired)
+        return extract_json_from_llm_response(response_text)

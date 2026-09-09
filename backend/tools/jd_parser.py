@@ -1,7 +1,9 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from backend.llm.client import LLMClient
+from backend.tools.json_utils import extract_json_from_llm_response
 import json
+import re
 
 class ParsedJD(BaseModel):
     job_title: str = Field(..., description="The official title of the position")
@@ -9,9 +11,6 @@ class ParsedJD(BaseModel):
     experience_years: Optional[int] = Field(None, description="Minimum years of experience required")
     summary: str = Field(..., description="A 2-3 sentence summary of the role")
     domain: str = Field(..., description="Industry domain (e.g., Fintech, Healthcare, E-commerce)")
-
-import json
-import re
 
 async def parse_jd(llm: LLMClient, jd_text: str) -> ParsedJD:
     system_prompt = (
@@ -36,21 +35,5 @@ async def parse_jd(llm: LLMClient, jd_text: str) -> ParsedJD:
         temperature=0.1
     )
 
-    # Strip markdown code fences some models wrap JSON in despite instructions not to
-    cleaned = response_text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-
-    match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
-    if not match:
-        snippet = response_text[:200].replace("\n", " ")
-        raise ValueError(f"Could not find JSON object in LLM response. Model said: \"{snippet}\"")
-
-    clean_json = match.group(1)
-    try:
-        data = json.loads(clean_json)
-    except json.JSONDecodeError:
-        repaired = clean_json.replace("'", '"')
-        data = json.loads(repaired)
-
+    data = extract_json_from_llm_response(response_text)
     return ParsedJD(**data)

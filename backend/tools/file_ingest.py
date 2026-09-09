@@ -37,6 +37,8 @@ def pdf_to_markdown(pdf_bytes: bytes) -> str:
             raise e
         raise ValueError(f"Failed to extract text from PDF: {str(e)}")
 
+from backend.tools.json_utils import extract_json_from_llm_response
+
 async def parse_resume_md(llm: LLMClient, md_text: str) -> ExtractedResumeProfile:
     """
     Parses a Markdown-formatted resume to extract structured profile information.
@@ -59,13 +61,7 @@ async def parse_resume_md(llm: LLMClient, md_text: str) -> ExtractedResumeProfil
         temperature=0.1
     )
     
-    # Extract JSON via regex
-    match = re.search(r"(\{.*\})", response_text, re.DOTALL)
-    if not match:
-        raise ValueError("Could not find JSON object in LLM response")
-    
-    clean_json = match.group(1)
-    data = json.loads(clean_json)
+    data = extract_json_from_llm_response(response_text)
     return ExtractedResumeProfile(**data)
 
 def parse_candidates_csv(csv_bytes: bytes) -> List[Dict[str, str]]:

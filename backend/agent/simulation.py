@@ -4,6 +4,7 @@ import re
 from backend.llm.client import LLMClient
 from backend.tools.jd_parser import ParsedJD
 from backend.tools.github_scout import GitHubCandidateData
+from backend.tools.json_utils import extract_json_from_llm_response
 
 async def simulate_interview(
     llm: LLMClient,
@@ -146,19 +147,7 @@ async def simulate_interview(
     )
 
     try:
-        cleaned = eval_response.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-
-        match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
-        if not match:
-            raise ValueError("No JSON object found in response")
-
-        clean_json = match.group(1)
-        try:
-            eval_data = json.loads(clean_json)
-        except json.JSONDecodeError:
-            eval_data = json.loads(clean_json.replace("'", '"'))
+        eval_data = extract_json_from_llm_response(eval_response)
     except Exception as e:
         eval_data = {
             "technical_depth": 50,
