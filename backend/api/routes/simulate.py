@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import Optional
@@ -9,6 +10,7 @@ from backend.tools.jd_parser import ParsedJD
 from backend.tools.github_scout import GitHubScout
 from backend.agent.simulation import simulate_interview
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_SIMULATION_TURNS = 10
