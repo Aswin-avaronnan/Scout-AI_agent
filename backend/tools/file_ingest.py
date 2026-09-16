@@ -9,12 +9,12 @@ import io
 from backend.llm.client import LLMClient
 
 class ExtractedResumeProfile(BaseModel):
-    name: str = Field(..., description="Full name of the candidate")
+    name: str = Field("Candidate", description="Full name of the candidate")
     email: Optional[str] = Field(None, description="Email address")
     github_url: Optional[str] = Field(None, description="GitHub profile URL if present")
     bio: Optional[str] = Field(None, description="A 1-2 sentence professional bio or summary of experience")
     skills: List[str] = Field(default_factory=list, description="List of technical skills and tools mentioned")
-    experience_years: Optional[int] = Field(None, description="Estimated years of professional experience")
+    experience_years: Optional[float] = Field(None, description="Estimated years of professional experience")
 
 def pdf_to_markdown(pdf_bytes: bytes) -> str:
     """
@@ -62,7 +62,17 @@ async def parse_resume_md(llm: LLMClient, md_text: str) -> ExtractedResumeProfil
     )
     
     data = extract_json_from_llm_response(response_text)
-    return ExtractedResumeProfile(**data)
+    
+    normalized = {
+        "name": data.get("name") or data.get("full_name") or data.get("candidate_name") or "Candidate",
+        "email": data.get("email"),
+        "github_url": data.get("github_url") or data.get("github") or data.get("github_link"),
+        "bio": data.get("bio") or data.get("summary") or data.get("profile_summary"),
+        "skills": data.get("skills") or data.get("technical_skills") or data.get("skills_required") or [],
+        "experience_years": data.get("experience_years") or data.get("years_experience") or data.get("experience")
+    }
+    
+    return ExtractedResumeProfile(**normalized)
 
 def parse_candidates_csv(csv_bytes: bytes) -> List[Dict[str, str]]:
     """
