@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Candidate } from '../store/pipeline';
-import { User, Github, Star, ExternalLink, FileText } from 'lucide-react';
+import { Candidate, usePipelineStore } from '../store/pipeline';
+import { User, Github, Star, ExternalLink, FileText, BookmarkPlus, Check, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 
 export function CandidateCard({ candidate }: { candidate: Candidate }) {
+  const { moveCandidate } = usePipelineStore();
   const isSimulated = candidate.simulation_status === 'completed' && candidate.simulation_eval;
   const displayScore = isSimulated ? candidate.combined_score : candidate.match_score;
   const scoreLabel = isSimulated ? 'Score' : 'Match';
@@ -13,6 +14,17 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
   // directly via /scout or a sheet upload has a real GitHub username, so treat
   // undefined as "yes, this is real" rather than assuming the negative.
   const hasRealGithub = candidate.github_found !== false;
+  const isShortlisted = candidate.stage === 'shortlisted';
+
+  const handleToggleShortlist = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isShortlisted) {
+      // Return to simulated if simulated, else to scored
+      moveCandidate(candidate.id, isSimulated ? 'simulated' : 'scored');
+    } else {
+      moveCandidate(candidate.id, 'shortlisted');
+    }
+  };
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 hover:border-zinc-700 transition-all space-y-4">
@@ -59,12 +71,17 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
               {lang}
             </span>
           ))}
+          {candidate.flagged_for_review && (
+            <span className="px-1.5 py-0.5 rounded bg-yellow-950/60 border border-yellow-800 text-[8px] font-bold text-yellow-400 flex items-center gap-1 uppercase tracking-wider" title="Flagged during automated scoring audit">
+              <AlertTriangle size={9} /> Flagged
+            </span>
+          )}
           {candidate.simulation_status === 'simulating' && (
             <span className="px-1.5 py-0.5 rounded bg-amber-950/50 border border-amber-900 text-[8px] font-bold text-amber-400 animate-pulse uppercase tracking-wider">
               Simulating
             </span>
           )}
-          {candidate.simulation_status === 'pending' && (
+          {candidate.simulation_status === 'pending' && candidate.stage !== 'sourced' && (
             <span className="px-1.5 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
               Pending Sim
             </span>
@@ -80,21 +97,41 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
         </p>
       </div>
 
-      <div className="pt-2 border-t border-zinc-800 flex justify-between items-center">
-        <div className="flex gap-2">
+      <div className="pt-2 border-t border-zinc-800 flex justify-between items-center gap-2">
+        <button
+          onClick={handleToggleShortlist}
+          className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded transition-all ${
+            isShortlisted
+              ? 'bg-emerald-950/50 border border-emerald-800 text-emerald-400 hover:bg-emerald-900/50'
+              : 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-600'
+          }`}
+          title={isShortlisted ? 'Click to un-shortlist' : 'Shortlist candidate'}
+        >
+          {isShortlisted ? (
+            <>
+              <Check size={10} /> Shortlisted
+            </>
+          ) : (
+            <>
+              <BookmarkPlus size={10} /> Shortlist
+            </>
+          )}
+        </button>
+
+        <div className="flex items-center gap-3">
           {candidate.profile.public_repos > 0 && (
             <div className="flex items-center gap-1 text-[10px] text-zinc-500">
               <Star size={10} />
-              <span>{candidate.profile.public_repos} repos</span>
+              <span>{candidate.profile.public_repos}</span>
             </div>
           )}
+          <Link 
+            href={`/candidate/${candidate.id}`}
+            className="text-[10px] font-bold text-zinc-400 hover:text-white flex items-center gap-1"
+          >
+            Details <ExternalLink size={10} />
+          </Link>
         </div>
-        <Link 
-          href={`/candidate/${candidate.id}`}
-          className="text-[10px] font-bold text-zinc-400 hover:text-white flex items-center gap-1"
-        >
-          Details <ExternalLink size={10} />
-        </Link>
       </div>
     </div>
   );

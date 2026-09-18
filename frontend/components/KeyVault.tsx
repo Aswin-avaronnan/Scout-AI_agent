@@ -16,8 +16,10 @@ export function KeyVault() {
 
   return (
     <div className="p-6 bg-zinc-900 border border-zinc-800 rounded-lg max-w-md mx-auto">
-      <h2 className="text-xl font-bold mb-4 text-zinc-100">Key Vault</h2>
-      <p className="text-sm text-zinc-400 mb-6">Keys stay in your browser. Never saved to server.</p>
+      <h2 className="text-xl font-bold mb-2 text-zinc-100">Key Vault</h2>
+      <p className="text-xs text-zinc-400 mb-6 leading-relaxed">
+        API keys stay in your browser. Job descriptions, candidate data, and API keys are never stored. Anonymous usage metrics (event type, timing, error rates) are recorded to improve the product.
+      </p>
 
       <div className="space-y-4">
         <div>

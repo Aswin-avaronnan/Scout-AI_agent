@@ -132,9 +132,21 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Right Column - Keys */}
+        {/* Right Column - Keys & Privacy */}
         <div className="space-y-6">
           <KeyVault />
+
+          <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-6 space-y-3">
+            <h3 className="text-xs font-black uppercase text-zinc-500 tracking-wider flex items-center gap-2">
+              <Shield size={14} className="text-emerald-500" /> Privacy & Data Handling
+            </h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Job descriptions, candidate data, and API keys are never stored. Anonymous usage metrics (event type, timing, error rates) are recorded to improve the product.
+            </p>
+            <p className="text-[10px] text-zinc-600 leading-normal">
+              Candidate profile details and bios are streamed directly to your configured provider (OpenAI, Anthropic, Google, or Groq) using your personal API key and discarded when your browser session closes.
+            </p>
+          </div>
         </div>
       </main>
     </div>

@@ -37,7 +37,7 @@ class LLMClient(abc.ABC):
 
 class OpenAICompatibleClient(LLMClient):
     def __init__(self, api_key: str, base_url: Optional[str] = None, model: str = "gpt-4o-mini"):
-        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=30.0, max_retries=0)
         self.model = model
 
     async def complete(self, messages, system=None, max_tokens=2000, temperature=0.7):
@@ -55,7 +55,7 @@ class OpenAICompatibleClient(LLMClient):
 
 class AnthropicClient(LLMClient):
     def __init__(self, api_key: str, model: str = "claude-3-haiku-20240307"):
-        self.client = AsyncAnthropic(api_key=api_key)
+        self.client = AsyncAnthropic(api_key=api_key, timeout=30.0, max_retries=0)
         self.model = model
 
     async def complete(self, messages, system=None, max_tokens=2000, temperature=0.7):
@@ -91,7 +91,10 @@ class GeminiClient(LLMClient):
                 temperature=temperature
             )
 
-            response = await chat.send_message_async(last_msg, generation_config=config)
+            response = await asyncio.wait_for(
+                chat.send_message_async(last_msg, generation_config=config),
+                timeout=30.0
+            )
             return response.text
         return await _call_with_retry(_do_call)
 

@@ -35,7 +35,7 @@ class GitHubScout:
         self.base_url = "https://api.github.com"
 
     async def get_candidate_data(self, username: str) -> GitHubCandidateData:
-        async with httpx.AsyncClient(headers=self.headers) as client:
+        async with httpx.AsyncClient(headers=self.headers, timeout=10.0) as client:
             # 1. Fetch profile
             profile_res = await client.get(f"{self.base_url}/users/{username}")
             profile_res.raise_for_status()

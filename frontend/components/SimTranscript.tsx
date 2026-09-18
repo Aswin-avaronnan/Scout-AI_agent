@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { usePipelineStore, Candidate } from '../store/pipeline';
 import { useSessionStore } from '../store/session';
-import { Sparkles, Terminal, User, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Terminal, User, AlertCircle, RefreshCw, CheckCircle2, Sliders } from 'lucide-react';
 
 interface SimTranscriptProps {
   candidateId: string;
@@ -15,6 +15,7 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
   const { provider, apiKey, githubToken, model } = useSessionStore();
   
   const candidate = candidates.find(c => c.id === candidateId);
+  const [numTurns, setNumTurns] = useState<number>(3);
   const [localTranscript, setLocalTranscript] = useState<{ turn_index: number; speaker: 'interviewer' | 'candidate'; text: string }[]>([]);
   const [status, setStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -27,8 +28,9 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
   }, [localTranscript, isTyping]);
 
   // Run simulation stream
-  const runSimulationStream = async () => {
+  const runSimulationStream = async (turnsToRun?: number) => {
     if (!candidate || !job) return;
+    const activeTurns = turnsToRun || numTurns;
     
     // Reset state
     setStatus('running');
@@ -43,10 +45,7 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
       simulation_eval: null
     });
 
-    // Local accumulator, independent of React state timing, so the eval
-    // handler below always has the true, up-to-date transcript to persist.
     const collectedTurns: { turn_index: number; speaker: 'interviewer' | 'candidate'; text: string }[] = [];
-
     const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:7860';
     
     try {
@@ -60,7 +59,7 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
         body: JSON.stringify({
           jd: job,
           candidate_username: candidate.username,
-          num_turns: 3,
+          num_turns: activeTurns,
           provider: provider,
           model: model
         })
@@ -106,11 +105,9 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
             }
 
             setLocalTranscript((prev) => {
-              // Ensure we don't add duplicate turns
               const exists = prev.some(t => t.turn_index === turn.turn_index && t.speaker === turn.speaker);
               if (exists) return prev;
               
-              // Toggle speaker typing indicator
               setIsTyping(turn.speaker === 'interviewer' ? 'candidate' : 'interviewer');
               return [...prev, turn];
             });
@@ -123,7 +120,7 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
             updateCandidateSim(candidate.id, {
               simulation_status: 'completed',
               simulation_eval: evalData,
-              simulation_transcript: collectedTurns // Correct, up-to-date transcript
+              simulation_transcript: collectedTurns
             });
             
             // Advance candidate stage to simulated
@@ -148,7 +145,7 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
 
   // Run on mount
   useEffect(() => {
-    runSimulationStream();
+    runSimulationStream(numTurns);
   }, [candidateId]);
 
   if (!candidate) return null;
@@ -163,22 +160,45 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
             SIMULATE // <span className="text-white font-bold">{candidate.profile.name || candidate.username}</span>
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          {status === 'running' && (
-            <span className="flex items-center gap-1.5 text-[10px] font-mono text-amber-500 uppercase font-bold animate-pulse">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Live Streaming
-            </span>
-          )}
-          {status === 'completed' && (
-            <span className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 uppercase font-bold">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span> Session Complete
-            </span>
-          )}
-          {status === 'failed' && (
-            <span className="flex items-center gap-1.5 text-[10px] font-mono text-red-500 uppercase font-bold">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span> Terminated
-            </span>
-          )}
+
+        <div className="flex items-center gap-4">
+          {/* Turn selector control */}
+          <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-800 text-[10px] font-mono">
+            <span className="text-zinc-500">Turns:</span>
+            <select
+              value={numTurns}
+              disabled={status === 'running'}
+              onChange={(e) => {
+                const newTurns = Number(e.target.value);
+                setNumTurns(newTurns);
+              }}
+              className="bg-transparent text-white font-bold outline-none cursor-pointer disabled:cursor-not-allowed"
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                <option key={n} value={n} className="bg-zinc-900 text-white">
+                  {n} {n === 1 ? 'turn' : 'turns'}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {status === 'running' && (
+              <span className="flex items-center gap-1.5 text-[10px] font-mono text-amber-500 uppercase font-bold animate-pulse">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Live Streaming
+              </span>
+            )}
+            {status === 'completed' && (
+              <span className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 uppercase font-bold">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span> Complete
+              </span>
+            )}
+            {status === 'failed' && (
+              <span className="flex items-center gap-1.5 text-[10px] font-mono text-red-500 uppercase font-bold">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span> Terminated
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -306,10 +326,10 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
                 {errorMsg || 'A critical error occurred while streaming the turn responses. The session has been halted.'}
               </p>
               <button
-                onClick={runSimulationStream}
+                onClick={() => runSimulationStream(numTurns)}
                 className="mt-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-white rounded text-xs font-bold transition-all flex items-center gap-1.5"
               >
-                <RefreshCw size={12} /> Restart Simulation
+                <RefreshCw size={12} /> Restart Simulation ({numTurns} turns)
               </button>
             </div>
           </div>
@@ -327,14 +347,23 @@ export function SimTranscript({ candidateId, onBack }: SimTranscriptProps) {
           Return to Detail
         </button>
 
-        {status === 'completed' && (
+        <div className="flex items-center gap-3">
+          {status === 'completed' && (
+            <button
+              onClick={() => runSimulationStream(numTurns)}
+              className="px-3 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5"
+            >
+              <RefreshCw size={12} /> Re-run ({numTurns} turns)
+            </button>
+          )}
+
           <button
             onClick={() => onBack()}
             className="px-4 py-2 bg-white text-black text-xs font-bold rounded-lg hover:bg-zinc-200 transition-all flex items-center gap-1.5"
           >
              View Scorecard
           </button>
-        )}
+        </div>
       </div>
     </div>
   );

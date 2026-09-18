@@ -22,6 +22,7 @@ export function JDInput() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const setPipelineData = usePipelineStore((state) => state.setPipelineData);
+  const setSourcedCandidates = usePipelineStore((state) => state.setSourcedCandidates);
   const { provider, model } = useSessionStore();
 
   const handleDrag = (e: React.DragEvent) => {
@@ -116,6 +117,7 @@ export function JDInput() {
           return;
         }
         const usernameList = usernames.split(/[,\n]+/).map(u => u.trim()).filter(u => u);
+        setSourcedCandidates(usernameList, { job_title: 'Scouting Candidates...', domain: 'Pipeline' });
         data = await fetchBackend('/scout', {
           method: 'POST',
           body: JSON.stringify({
@@ -131,6 +133,11 @@ export function JDInput() {
           setLoading(false);
           return;
         }
+        
+        const previewNames = activeTab === 'resume'
+          ? selectedFiles.slice(0, maxResumeLimit > 0 ? maxResumeLimit : selectedFiles.length).map(f => f.name.replace(/\.pdf$/i, ''))
+          : ['Parsing candidate sheet...'];
+        setSourcedCandidates(previewNames, { job_title: 'Processing Upload...', domain: 'Ingestion' });
         
         const formData = new FormData();
         formData.append('jd_text', jdText);

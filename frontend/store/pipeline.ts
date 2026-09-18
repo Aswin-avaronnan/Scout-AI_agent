@@ -22,6 +22,8 @@ export interface Candidate {
     simulation_score: number;
   } | null;
   combined_score?: number;
+  flagged_for_review?: boolean;
+  flag_reasons?: string[];
 }
 
 interface PipelineState {
@@ -29,6 +31,7 @@ interface PipelineState {
   candidates: Candidate[];
   matchWeight: number;
   simWeight: number;
+  setSourcedCandidates: (usernames: string[], initialJob?: any) => void;
   setPipelineData: (data: any) => void;
   moveCandidate: (id: string, stage: Candidate['stage']) => void;
   updateCandidateSim: (id: string, update: Partial<Candidate>) => void;
@@ -52,15 +55,36 @@ export const usePipelineStore = create<PipelineState>()(
       candidates: [],
       matchWeight: 60,
       simWeight: 40,
+      setSourcedCandidates: (usernames, initialJob = null) => {
+        const sourced = usernames.map(u => ({
+          id: u,
+          username: u,
+          profile: { username: u, name: u, public_repos: 0, followers: 0, following: 0, bio: 'Sourcing in progress...' },
+          top_languages: [],
+          match_score: 0,
+          reasoning: 'Profile sourced, awaiting evaluation...',
+          skill_match: [],
+          missing_skills: [],
+          stage: 'sourced' as const,
+          simulation_status: 'pending' as const,
+          simulation_transcript: [],
+          simulation_eval: null,
+          combined_score: 0
+        }));
+        set({
+          job: initialJob || { job_title: 'Sourcing candidates...', domain: 'Pipeline' },
+          candidates: sourced
+        });
+      },
       setPipelineData: (data) => {
-        const formattedCandidates = data.candidates
+        const formattedCandidates = (data.candidates || [])
           .filter((c: any) => !c.error)
           .map((c: any) => {
             const candidateBase = {
               ...c,
               id: c.username,
-              stage: 'scored',
-              simulation_status: 'pending',
+              stage: 'scored' as const,
+              simulation_status: 'pending' as const,
               simulation_transcript: [],
               simulation_eval: null,
             };
