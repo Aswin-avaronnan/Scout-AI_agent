@@ -6,7 +6,7 @@ const cspHeader = `
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: https://avatars.githubusercontent.com https://github.com;
   font-src 'self';
-  connect-src 'self' ${apiBaseUrl} http://localhost:7860;
+  connect-src 'self' ${apiBaseUrl} http://localhost:7860 https://*.ingest.sentry.io https://*.ingest.us.sentry.io;
   frame-ancestors 'none';
   base-uri 'self';
   form-action 'self';
@@ -33,4 +33,28 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+// Wrap with Sentry config for source map uploads and performance monitoring.
+// Using /config import path as required by @sentry/nextjs v10+.
+const { withSentryConfig } = require("@sentry/nextjs/config");
+
+module.exports = withSentryConfig(nextConfig, {
+  org: "avdeisgns",
+  project: "catalyst-scout-frontend",
+
+  // Only print logs for uploading source maps in CI
+  silent: !process.env.CI,
+
+  // Upload a larger set of source maps for prettier stack traces (increases build time)
+  widenClientFileUpload: true,
+
+  // Uncomment to route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
+  // tunnelRoute: "/monitoring",
+
+  webpack: {
+    // Enables automatic instrumentation of Vercel Cron Monitors.
+    automaticVercelMonitors: true,
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
+});

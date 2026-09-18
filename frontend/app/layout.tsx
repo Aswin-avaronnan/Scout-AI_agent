@@ -1,9 +1,16 @@
 import React from 'react';
 import './globals.css';
+import * as Sentry from '@sentry/nextjs';
+import type { Metadata } from 'next';
 
-export const metadata = {
-  title: 'Catalyst Scout — AI Technical Recruiting Agent',
-  description: 'Parse job descriptions, scout GitHub profiles, run AI interview simulations, and rank candidates. Bring your own API key. No data stored.',
+export function generateMetadata(): Metadata {
+  return {
+    title: 'Catalyst Scout — AI Technical Recruiting Agent',
+    description: 'Parse job descriptions, scout GitHub profiles, run AI interview simulations, and rank candidates. Bring your own API key. No data stored.',
+    other: {
+      ...Sentry.getTraceData()
+    }
+  };
 }
 
 export default function RootLayout({
@@ -17,5 +24,5 @@ export default function RootLayout({
         {children}
       </body>
     </html>
-  )
+  );
 }
